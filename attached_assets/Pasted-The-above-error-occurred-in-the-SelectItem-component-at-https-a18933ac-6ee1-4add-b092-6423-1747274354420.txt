@@ -1,0 +1,76 @@
+The above error occurred in the <SelectItem> component:
+
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=7b1a010c:853:7
+    at _c11 (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/src/components/ui/select.tsx:208:13)
+    at div
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V54TMEDA.js?v=7b1a010c:42:13
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=7b1a010c:79:13
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=7b1a010c:56:13
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V4TB3EZ5.js?v=7b1a010c:39:15
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=7b1a010c:764:13
+    at div
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=7b1a010c:79:13
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=7b1a010c:56:13
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V4TB3EZ5.js?v=7b1a010c:39:15
+    at Provider (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-M3NVYRND.js?v=7b1a010c:48:15)
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=7b1a010c:307:58
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=7b1a010c:79:13
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=7b1a010c:56:13
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V54TMEDA.js?v=7b1a010c:42:13
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-YAPFW53C.js?v=7b1a010c:258:22
+    at SelectPortal
+    at _c7 (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/src/components/ui/select.tsx:123:12)
+    at Provider (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-M3NVYRND.js?v=7b1a010c:48:15)
+    at Provider (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-M3NVYRND.js?v=7b1a010c:48:15)
+    at CollectionProvider (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V4TB3EZ5.js?v=7b1a010c:29:13)
+    at Provider (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-M3NVYRND.js?v=7b1a010c:48:15)
+    at Provider (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-M3NVYRND.js?v=7b1a010c:48:15)
+    at Popper (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RF4D6TC6.js?v=7b1a010c:1953:11)
+    at Select (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=7b1a010c:95:5)
+    at div
+    at form
+    at FormProvider (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4BFJKWC4.js?v=7b1a010c:102:11)
+    at div
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V54TMEDA.js?v=7b1a010c:42:13
+    at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-YAPFW53C.js?v=7b1a010c:59:7
+    at…
+
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=7b1a010c:853:7
+at _c11 (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/src/components/ui/select.tsx:208:13)
+at div
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V54TMEDA.js?v=7b1a010c:42:13
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=7b1a010c:79:13
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=7b1a010c:56:13
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V4TB3EZ5.js?v=7b1a010c:39:15
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=7b1a010c:764:13
+at div
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=7b1a010c:79:13
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=7b1a010c:56:13
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V4TB3EZ5.js?v=7b1a010c:39:15
+at Provider (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-M3NVYRND.js?v=7b1a010c:48:15)
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=7b1a010c:307:58
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=7b1a010c:79:13
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=7b1a010c:56:13
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V54TMEDA.js?v=7b1a010c:42:13
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-YAPFW53C.js?v=7b1a010c:258:22
+at SelectPortal
+at _c7 (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/src/components/ui/select.tsx:123:12)
+at Provider (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-M3NVYRND.js?v=7b1a010c:48:15)
+at Provider (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-M3NVYRND.js?v=7b1a010c:48:15)
+at CollectionProvider (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V4TB3EZ5.js?v=7b1a010c:29:13)
+at Provider (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-M3NVYRND.js?v=7b1a010c:48:15)
+at Provider (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-M3NVYRND.js?v=7b1a010c:48:15)
+at Popper (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RF4D6TC6.js?v=7b1a010c:1953:11)
+at Select (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=7b1a010c:95:5)
+at div
+at form
+at FormProvider (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4BFJKWC4.js?v=7b1a010c:102:11)
+at div
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V54TMEDA.js?v=7b1a010c:42:13
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-YAPFW53C.js?v=7b1a010c:59:7
+at…
+at t.value (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+A  must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.

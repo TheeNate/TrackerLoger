@@ -61,7 +61,10 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry }: Sup
   const handleSupervisorChange = (value: string) => {
     setSelectedSupervisor(value);
     
-    if (value) {
+    if (value === "new") {
+      // Clear form when "new supervisor" is selected
+      form.reset();
+    } else if (value) {
       // Find selected supervisor and populate form
       const supervisor = supervisors.find((s) => s.id.toString() === value);
       if (supervisor) {
@@ -71,9 +74,6 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry }: Sup
         form.setValue("certificationLevel", supervisor.certificationLevel as any);
         form.setValue("company", supervisor.company);
       }
-    } else {
-      // Clear form when "new supervisor" is selected
-      form.reset();
     }
   };
   
@@ -84,7 +84,7 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry }: Sup
     
     try {
       // Submit verification request
-      const requestData = selectedSupervisor 
+      const requestData = selectedSupervisor && selectedSupervisor !== "new"
         ? { supervisorId: parseInt(selectedSupervisor) }
         : values;
       
@@ -162,7 +162,7 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry }: Sup
                   <SelectValue placeholder="Select or enter new supervisor" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Enter new supervisor</SelectItem>
+                  <SelectItem value="new">Enter new supervisor</SelectItem>
                   {supervisors.map((supervisor) => (
                     <SelectItem key={supervisor.id} value={supervisor.id.toString()}>
                       {supervisor.name} ({supervisor.email})
