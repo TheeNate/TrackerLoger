@@ -11,6 +11,7 @@ import { eq } from "drizzle-orm";
 import { sendMagicLink, sendVerificationRequest, sendVerificationConfirmation } from "./email";
 import { insertEntrySchema, insertSupervisorSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
+import { compare, hash } from 'bcrypt';
 
 // Extend express-session types
 declare module "express-session" {

@@ -2,10 +2,11 @@ import { pgTable, text, serial, timestamp, integer, real, boolean, uuid } from "
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// User model for magic link auth
+// User model with password auth
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   email: text("email").notNull().unique(),
+  password: text("password"),
   name: text("name"),
   employeeNumber: text("employee_number"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -13,6 +14,7 @@ export const users = pgTable("users", {
 
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
+  password: true,
   name: true,
   employeeNumber: true,
 });
