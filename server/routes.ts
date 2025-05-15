@@ -210,7 +210,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         const createdEntries = [];
         for (const entryData of entriesData) {
-          const parsedData = insertEntrySchema.parse(entryData);
+          // Ensure date is parsed properly
+          const parsedData = insertEntrySchema.parse({
+            ...entryData,
+            date: new Date(entryData.date)
+          });
           const newEntry = await storage.createEntry(parsedData);
           createdEntries.push(newEntry);
         }
@@ -222,7 +226,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId
         };
         
-        const parsedData = insertEntrySchema.parse(entryData);
+        // Ensure date is parsed properly
+        const parsedData = insertEntrySchema.parse({
+          ...entryData,
+          date: new Date(entryData.date)
+        });
         const newEntry = await storage.createEntry(parsedData);
         
         res.status(201).json(newEntry);

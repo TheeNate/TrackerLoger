@@ -62,7 +62,7 @@ export function NewEntryForm() {
     try {
       // Format entries for API
       const formattedEntries = values.entries.map((entry) => ({
-        date: new Date(entry.date).toISOString(),
+        date: entry.date, // Server will convert to Date object
         location: entry.location,
         method: entry.method,
         hours: Number(entry.hours),
