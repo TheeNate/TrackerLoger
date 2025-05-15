@@ -51,92 +51,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Authentication routes
-  app.post("/api/auth/request-magic-link", async (req, res) => {
+  // Register new user
+  app.post("/api/auth/register", async (req, res) => {
     try {
-      const { email } = req.body;
-      if (!email) {
-        return res.status(400).json({ message: "Email is required" });
-      }
-
-      // Find or create user
-      let user = await storage.getUserByEmail(email);
-      if (!user) {
-        // Create new user with just email
-        const newUserData = insertUserSchema.parse({ email });
-        user = await storage.createUser(newUserData);
-      }
-
-      // Generate token
-      const token = randomBytes(32).toString("hex");
+      const { email, password, name, employeeNumber } = req.body;
       
-      // Store token in session (in a real app, store in database with expiration)
-      req.session.magicLinkToken = token;
-      req.session.magicLinkEmail = email;
-      
-      try {
-        // Send magic link email and get the login URL
-        const loginUrl = await sendMagicLink(email, token);
-        
-        // Return success response with login URL
-        // This will be used by the frontend if email delivery fails
-        res.json({ 
-          message: "Magic link sent", 
-          loginUrl
-        });
-      } catch (error) {
-        console.error("Failed to send magic link email:", error);
-        res.status(500).json({ message: "Error sending magic link" });
+      // Validate input
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
       }
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ message: "Email already registered" });
+      }
+      
+      // Hash password
+      const hashedPassword = await hash(password, 10);
+      
+      // Create user
+      const userData = insertUserSchema.parse({ 
+        email, 
+        password: hashedPassword,
+        name,
+        employeeNumber 
+      });
+      
+      const user = await storage.createUser(userData);
+      
+      // Log user in
+      req.session.userId = user.id;
+      
+      // Send user data (excluding password)
+      const { password: _, ...userWithoutPassword } = user;
+      res.status(201).json(userWithoutPassword);
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: "Error sending magic link" });
+      console.error("Registration error:", error);
+      res.status(500).json({ message: "Error during registration" });
     }
   });
-
-  app.get("/api/auth/verify-magic-link", async (req, res) => {
+  
+  // Login with email/password
+  app.post("/api/auth/login", async (req, res) => {
     try {
-      const { token } = req.query;
+      const { email, password } = req.body;
       
-      if (!token || typeof token !== "string") {
-        return res.status(400).json({ message: "Invalid token" });
+      // Validate input
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
       }
       
-      // Verify the token matches and hasn't expired
-      if (
-        !req.session.magicLinkToken ||
-        req.session.magicLinkToken !== token
-      ) {
-        return res.status(401).json({ message: "Invalid or expired token" });
-      }
-      
-      // Get user by email
-      const email = req.session.magicLinkEmail;
-      if (!email) {
-        return res.status(401).json({ message: "Invalid session" });
-      }
-      
+      // Get user
       const user = await storage.getUserByEmail(email);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
+      if (!user || !user.password) {
+        return res.status(401).json({ message: "Invalid email or password" });
       }
       
-      // Log the user in
-      req.session.userId = user.id;
-      delete req.session.magicLinkToken;
-      delete req.session.magicLinkEmail;
+      // Verify password
+      const passwordMatches = await compare(password, user.password);
+      if (!passwordMatches) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
       
-      res.json({ 
-        message: "Authentication successful", 
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          employeeNumber: user.employeeNumber
-        } 
-      });
+      // Login successful
+      req.session.userId = user.id;
+      
+      // Send user data (excluding password)
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: "Error verifying magic link" });
+      console.error("Login error:", error);
+      res.status(500).json({ message: "Error during login" });
     }
   });
 
