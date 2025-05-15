@@ -32,12 +32,20 @@ export const supervisorFormSchema = z.object({
 
 export type SupervisorFormValues = z.infer<typeof supervisorFormSchema>;
 
-// Login form validation schema
+// Authentication form validation schemas
 export const loginFormSchema = z.object({
   email: z.string().email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
 export type LoginFormValues = z.infer<typeof loginFormSchema>;
+
+export const registerFormSchema = loginFormSchema.extend({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  employeeNumber: z.string().optional(),
+});
+
+export type RegisterFormValues = z.infer<typeof registerFormSchema>;
 
 // Verification form validation schema
 export const verificationFormSchema = z.object({

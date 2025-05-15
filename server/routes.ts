@@ -143,12 +143,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
       
-      res.json({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        employeeNumber: user.employeeNumber
-      });
+      // Send user data without password
+      const { password, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Error fetching user" });
@@ -180,12 +177,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(users.id, user.id))
         .returning();
       
-      res.json({
-        id: updatedUser[0].id,
-        email: updatedUser[0].email,
-        name: updatedUser[0].name,
-        employeeNumber: updatedUser[0].employeeNumber
-      });
+      // Send user data without password
+      const { password, ...userWithoutPassword } = updatedUser[0];
+      res.json(userWithoutPassword);
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Error updating user" });
