@@ -73,23 +73,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.session.magicLinkEmail = email;
       
       try {
-        // Send magic link email
-        await sendMagicLink(email, token);
-        res.json({ message: "Magic link sent" });
+        // Send magic link email and get the login URL
+        const loginUrl = await sendMagicLink(email, token);
+        
+        // Return success response with login URL
+        // This will be used by the frontend if email delivery fails
+        res.json({ 
+          message: "Magic link sent", 
+          loginUrl
+        });
       } catch (error) {
         console.error("Failed to send magic link email:", error);
-        
-        // For development: generate direct link for testing
-        const baseUrl = process.env.REPLIT_DOMAINS ? 
-          `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 
-          'http://localhost:5000';
-        const loginUrl = `${baseUrl}/login?token=${token}`;
-        
-        // Return the link directly for development purposes
-        res.json({ 
-          message: "Email delivery failed, but you can use this direct link:", 
-          loginUrl: loginUrl 
-        });
+        res.status(500).json({ message: "Error sending magic link" });
       }
     } catch (error) {
       console.error(error);

@@ -26,13 +26,13 @@ const getBaseUrl = () => {
 export const sendMagicLink = async (
   email: string, 
   token: string
-): Promise<void> => {
+): Promise<string> => {
   const baseUrl = getBaseUrl();
   const loginUrl = `${baseUrl}/login?token=${token}`;
   
   if (!process.env.SENDGRID_API_KEY) {
     console.log('Magic link URL (for dev testing):', loginUrl);
-    return;
+    return loginUrl;
   }
   
   const msg = {
@@ -60,6 +60,7 @@ export const sendMagicLink = async (
   
   try {
     await sgMail.send(msg);
+    return loginUrl;
   } catch (error: any) {
     console.error('Error sending magic link email:', error);
     if (error.response) {
@@ -67,6 +68,7 @@ export const sendMagicLink = async (
     }
     // Print URL for development fallback
     console.log('Magic link URL (fallback):', loginUrl);
+    return loginUrl;
   }
 };
 
