@@ -8,7 +8,8 @@ import { pool } from "./db";
 import { db } from "./db";
 import { users, entries, supervisors, type User } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { sendMagicLink, sendVerificationRequest, sendVerificationConfirmation } from "./email";
+import { getBaseUrl, sendVerificationConfirmation } from "./email";
+import { sendMagicLinkEmail, sendVerificationEmail } from "./mailsender";
 import { insertEntrySchema, insertSupervisorSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
 import { compare, hash } from 'bcrypt';
@@ -338,8 +339,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(verificationUrl);
       console.log("-------------------------------------------------\n");
       
-      // Also try to send email (even though it will fail)
-      await sendVerificationRequest(supervisor, user, entry);
+      // Send email using mailsender service
+      const emailSent = await sendVerificationEmail(
+        supervisor.email,
+        user.name,
+        user.employeeNumber,
+        {
+          date: entry.date,
+          location: entry.location,
+          method: entry.method,
+          hours: entry.hours
+        },
+        verificationUrl
+      );
+      
+      if (!emailSent) {
+        console.log("Email delivery failed, but verification URL is available in logs above");
+      }
       
       res.json({ 
         message: "Verification request sent", 

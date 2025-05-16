@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Entry, Supervisor } from "@shared/schema";
 import { supervisorFormSchema, type SupervisorFormValues } from "@/types";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Check, Copy } from "lucide-react";
 
 interface SupervisorVerifyModalProps {
   isOpen: boolean;

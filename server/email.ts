@@ -13,7 +13,7 @@ if (!process.env.SENDGRID_API_KEY) {
 const DEFAULT_FROM_EMAIL = 'noreply@ojtlogger.app';
 
 // Get base URL for links
-const getBaseUrl = () => {
+export const getBaseUrl = () => {
   const domain = process.env.REPLIT_DOMAINS ? 
     process.env.REPLIT_DOMAINS.split(',')[0] : 
     'localhost:5000';
