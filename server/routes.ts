@@ -342,8 +342,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Send email using mailsender service
       const emailSent = await sendVerificationEmail(
         supervisor.email,
-        user.name,
-        user.employeeNumber,
+        user.name || 'User',
+        user.employeeNumber || '',
         {
           date: entry.date,
           location: entry.location,

@@ -78,7 +78,7 @@ export async function sendMagicLinkEmail(
 export async function sendVerificationEmail(
   to: string,
   userName: string,
-  employeeNumber: string | null,
+  employeeNumber: string | null | undefined,
   entryDetails: {
     date: Date;
     location: string;
