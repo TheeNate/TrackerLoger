@@ -8,6 +8,7 @@ import AuthPage from "@/pages/AuthPage";
 import ProfilePage from "@/pages/ProfilePage";
 import VerifyPage from "@/pages/VerifyPage";
 import SuccessPage from "@/pages/SuccessPage";
+import { ProtectedRoute } from "@/lib/protected-route";
 import { useEffect } from "react";
 
 function Router() {
@@ -15,7 +16,11 @@ function Router() {
     <Switch>
       <Route path="/" component={AuthPage} />
       <Route path="/auth" component={AuthPage} />
-      <Route path="/profile" component={ProfilePage} />
+      <Route path="/profile">
+        <ProtectedRoute>
+          <ProfilePage />
+        </ProtectedRoute>
+      </Route>
       <Route path="/verify/:token" component={VerifyPage} />
       <Route path="/success" component={SuccessPage} />
       <Route component={NotFound} />

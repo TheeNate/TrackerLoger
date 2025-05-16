@@ -102,15 +102,15 @@ export function NewEntryForm() {
   };
   
   const methodOptions = [
-    { value: NDTMethods.ET, label: "ET" },
-    { value: NDTMethods.RFT, label: "RFT" },
-    { value: NDTMethods.MT, label: "MT" },
-    { value: NDTMethods.PT, label: "PT" },
-    { value: NDTMethods.RT, label: "RT" },
-    { value: NDTMethods.UT_THK, label: "UT Thk." },
-    { value: NDTMethods.UTSW, label: "UTSW" },
-    { value: NDTMethods.PMI, label: "PMI" },
-    { value: NDTMethods.LSI, label: "LSI" },
+    { value: "ET", label: "ET" },
+    { value: "RFT", label: "RFT" },
+    { value: "MT", label: "MT" },
+    { value: "PT", label: "PT" },
+    { value: "RT", label: "RT" },
+    { value: "UT_THK", label: "UT Thk." },
+    { value: "UTSW", label: "UTSW" },
+    { value: "PMI", label: "PMI" },
+    { value: "LSI", label: "LSI" },
   ];
   
   return (

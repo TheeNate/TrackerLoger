@@ -1,35 +1,29 @@
-import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { NewEntryForm } from "@/components/NewEntryForm";
 import { OJTTable } from "@/components/OJTTable";
 import { SupervisorVerifyModal } from "@/components/SupervisorVerifyModal";
 import { EmailSentModal } from "@/components/EmailSentModal";
-import { Entry } from "@shared/schema";
+import { Entry, User } from "@shared/schema";
 
 export default function ProfilePage() {
-  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
   const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
   const [isEmailSentModalOpen, setIsEmailSentModalOpen] = useState(false);
   
   // Query user data
-  const { data: user, isLoading: isLoadingUser, isError: isUserError } = useQuery({
-    queryKey: ["/api/user"],
-    onError: (error) => {
-      // Redirect to login if not authenticated
-      setLocation("/");
-    },
+  const { data: user, isLoading: isLoadingUser } = useQuery<User>({
+    queryKey: ["/api/user"]
   });
   
   // Query entries
-  const { data: entries = [], isLoading: isLoadingEntries } = useQuery({
+  const { data: entries = [], isLoading: isLoadingEntries } = useQuery<Entry[]>({
     queryKey: ["/api/entries"],
-    enabled: !!user,
+    enabled: !!user
   });
   
   // Get verified entries for PDF export
@@ -56,8 +50,8 @@ export default function ProfilePage() {
     );
   }
   
-  if (isUserError || !user) {
-    return null; // Will redirect to login via the onError handler
+  if (!user) {
+    return null; // Protected route will handle redirect
   }
   
   const now = new Date();
