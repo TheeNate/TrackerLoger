@@ -328,13 +328,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
       
-      // Send verification email
+      // Get verification URL
+      const baseUrl = req.protocol + '://' + req.get('host');
+      const verificationUrl = `${baseUrl}/verify/${entry.verificationToken}`;
+      
+      // Log the verification link clearly in the console
+      console.log("\n-------------------------------------------------");
+      console.log("VERIFICATION LINK (For testing since email is not working):");
+      console.log(verificationUrl);
+      console.log("-------------------------------------------------\n");
+      
+      // Also try to send email (even though it will fail)
       await sendVerificationRequest(supervisor, user, entry);
       
       res.json({ 
         message: "Verification request sent", 
         supervisor,
-        entry
+        entry,
+        note: "Check server logs for direct verification link"
       });
     } catch (error) {
       console.error(error);

@@ -77,7 +77,7 @@ export const sendVerificationRequest = async (
   supervisor: Supervisor,
   user: User,
   entry: Entry
-): Promise<void> => {
+): Promise<string> => {
   const baseUrl = getBaseUrl();
   const verifyUrl = `${baseUrl}/verify/${entry.verificationToken}`;
   
@@ -89,7 +89,7 @@ export const sendVerificationRequest = async (
   
   if (!process.env.SENDGRID_API_KEY) {
     console.log('Verification URL (for dev testing):', verifyUrl);
-    return;
+    return verifyUrl;
   }
   
   const msg = {
@@ -125,6 +125,7 @@ export const sendVerificationRequest = async (
   
   try {
     await sgMail.send(msg);
+    return verifyUrl;
   } catch (error: any) {
     console.error('Error sending verification request email:', error);
     if (error.response) {
@@ -132,6 +133,7 @@ export const sendVerificationRequest = async (
     }
     // Print URL for development fallback
     console.log('Verification URL (fallback):', verifyUrl);
+    return verifyUrl;
   }
 };
 
