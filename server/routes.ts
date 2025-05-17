@@ -338,19 +338,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(verificationUrl);
       console.log("-------------------------------------------------\n");
       
-      // Send email using mailsender service
-      const emailSent = await sendVerificationEmail(
-        supervisor.email,
-        user.name || 'User',
-        user.employeeNumber || '',
-        {
-          date: entry.date,
-          location: entry.location,
-          method: entry.method,
-          hours: entry.hours
-        },
-        verificationUrl
-      );
+      // Send verification email using SendGrid
+      const emailSent = await sendVerificationRequest(supervisor, user, entry);
       
       if (!emailSent) {
         console.log("Email delivery failed, but verification URL is available in logs above");
