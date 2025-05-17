@@ -1,0 +1,38 @@
+[vite] connecting...
+[vite] connected.
+PDF generation error: 
+TypeError {}
+
+at t.value (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+Failed to generate PDF
+at generatePdf (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/src/lib/pdf.ts:114:11)
+at handleExportPdf (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/src/components/ProfileHeader.tsx:55:13)
+at HTMLUnknownElement.callCallback2 (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:3674:22)
+at Object.invokeGuardedCallbackDev (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:3699:24)
+at invokeGuardedCallback (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:3733:39)
+at invokeGuardedCallbackAndCatchFirstError (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:3736:33)
+at executeDispatch (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:7014:11)
+at processDispatchQueueItemsInOrder (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:7034:15)
+at processDispatchQueue (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:7043:13)
+at dispatchEventsForPlugins (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:7051:11)
+PDF generation error: 
+TypeError {}
+
+at t.value (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+Failed to generate PDF
+at generatePdf (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/src/lib/pdf.ts:114:11)
+at handleExportPdf (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/src/components/ProfileHeader.tsx:55:13)
+at HTMLUnknownElement.callCallback2 (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:3674:22)
+at Object.invokeGuardedCallbackDev (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:3699:24)
+at invokeGuardedCallback (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:3733:39)
+at invokeGuardedCallbackAndCatchFirstError (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:3736:33)
+at executeDispatch (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:7014:11)
+at processDispatchQueueItemsInOrder (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:7034:15)
+at processDispatchQueue (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:7043:13)
+at dispatchEventsForPlugins (https://a18933ac-6ee1-4add-b092-64238fc39e1d-00-29g1serv1u927.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=e139fe43:7051:11)
