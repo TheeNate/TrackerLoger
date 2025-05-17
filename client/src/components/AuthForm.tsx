@@ -2,19 +2,31 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest } from "@/lib/queryClient";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { loginFormSchema, registerFormSchema, type LoginFormValues, type RegisterFormValues } from "@/types";
+import {
+  loginFormSchema,
+  registerFormSchema,
+  type LoginFormValues,
+  type RegisterFormValues,
+} from "@/types";
 
 export function AuthForm() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  
+
   // Login form
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
@@ -23,7 +35,7 @@ export function AuthForm() {
       password: "",
     },
   });
-  
+
   // Register form
   const registerForm = useForm<RegisterFormValues>({
     resolver: zodResolver(registerFormSchema),
@@ -34,17 +46,23 @@ export function AuthForm() {
       employeeNumber: "",
     },
   });
-  
+
   const handleLogin = async (values: LoginFormValues) => {
     setIsLoading(true);
-    
+
     try {
       const response = await apiRequest("POST", "/api/auth/login", values);
-      toast({
-        title: "Login successful!",
-        description: "Welcome back to your OJT Hours Tracker.",
-      });
-      setLocation("/profile");
+      
+      // Add a slight delay to ensure the server has processed the session
+      setTimeout(() => {
+        toast({
+          title: "Login successful!",
+          description: "Welcome back to your OJT Hours Tracker.",
+        });
+        
+        // Use window.location for a hard redirect to ensure session state is refreshed
+        window.location.href = "/profile";
+      }, 100);
     } catch (error) {
       console.error(error);
       toast({
@@ -52,21 +70,27 @@ export function AuthForm() {
         description: "Invalid email or password. Please try again.",
         variant: "destructive",
       });
-    } finally {
       setIsLoading(false);
     }
+    // Note: We don't call setIsLoading(false) in the success path as we're redirecting
   };
-  
+
   const handleRegister = async (values: RegisterFormValues) => {
     setIsLoading(true);
-    
+
     try {
       const response = await apiRequest("POST", "/api/auth/register", values);
-      toast({
-        title: "Registration successful!",
-        description: "Your account has been created. You can now log in.",
-      });
-      setLocation("/profile");
+      
+      // Add a slight delay to ensure the server has processed the session
+      setTimeout(() => {
+        toast({
+          title: "Registration successful!",
+          description: "Your account has been created. Welcome to OJT Hours Tracker!",
+        });
+        
+        // Use window.location for a hard redirect to ensure session state is refreshed
+        window.location.href = "/profile";
+      }, 100);
     } catch (error) {
       console.error(error);
       toast({
@@ -74,27 +98,32 @@ export function AuthForm() {
         description: "This email may already be registered.",
         variant: "destructive",
       });
-    } finally {
       setIsLoading(false);
     }
+    // Note: We don't call setIsLoading(false) in the success path as we're redirecting
   };
-  
+
   return (
     <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
       <div className="mb-8 text-center">
         <h1 className="text-2xl font-semibold mb-2">OJT Hours Tracker</h1>
-        <p className="text-muted-foreground">Track and verify your on-the-job training hours</p>
+        <p className="text-muted-foreground">
+          Track and verify your on-the-job training hours
+        </p>
       </div>
-      
+
       <Tabs defaultValue="login" className="w-full">
         <TabsList className="grid w-full grid-cols-2 mb-6">
           <TabsTrigger value="login">Login</TabsTrigger>
           <TabsTrigger value="register">Register</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="login">
           <Form {...loginForm}>
-            <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
+            <form
+              onSubmit={loginForm.handleSubmit(handleLogin)}
+              className="space-y-4"
+            >
               <FormField
                 control={loginForm.control}
                 name="email"
@@ -102,13 +131,17 @@ export function AuthForm() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="your.email@example.com" type="email" {...field} />
+                      <Input
+                        placeholder="your.email@example.com"
+                        type="email"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={loginForm.control}
                 name="password"
@@ -122,9 +155,9 @@ export function AuthForm() {
                   </FormItem>
                 )}
               />
-              
-              <Button 
-                type="submit" 
+
+              <Button
+                type="submit"
                 className="w-full mt-2"
                 disabled={isLoading}
               >
@@ -133,10 +166,13 @@ export function AuthForm() {
             </form>
           </Form>
         </TabsContent>
-        
+
         <TabsContent value="register">
           <Form {...registerForm}>
-            <form onSubmit={registerForm.handleSubmit(handleRegister)} className="space-y-4">
+            <form
+              onSubmit={registerForm.handleSubmit(handleRegister)}
+              className="space-y-4"
+            >
               <FormField
                 control={registerForm.control}
                 name="email"
@@ -144,13 +180,17 @@ export function AuthForm() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="your.email@example.com" type="email" {...field} />
+                      <Input
+                        placeholder="your.email@example.com"
+                        type="email"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={registerForm.control}
                 name="password"
@@ -164,7 +204,7 @@ export function AuthForm() {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={registerForm.control}
                 name="name"
@@ -178,7 +218,7 @@ export function AuthForm() {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={registerForm.control}
                 name="employeeNumber"
@@ -192,9 +232,9 @@ export function AuthForm() {
                   </FormItem>
                 )}
               />
-              
-              <Button 
-                type="submit" 
+
+              <Button
+                type="submit"
                 className="w-full mt-2"
                 disabled={isLoading}
               >
