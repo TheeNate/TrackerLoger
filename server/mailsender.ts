@@ -131,24 +131,9 @@ export async function sendVerificationEmail(
     </div>
   `;
 
-  // For demo/development purposes, just log the verification URL and don't attempt to send email
-  // This avoids the trial account limitation
-  console.log("\n-------------------------------------------------");
-  console.log("VERIFICATION URL (Use this link to verify hours):");
-  console.log(verificationUrl);
-  console.log("-------------------------------------------------\n");
-  
-  // Try to send email, but don't consider it an error if it fails
-  try {
-    await sendEmail(
-      to,
-      `Verification Request for OJT Hours from ${userName}`,
-      html,
-    );
-    return true;
-  } catch (error) {
-    // Just log the error, but return true anyway since we have the fallback URL
-    console.log("Note: Email could not be sent, but verification URL is available above");
-    return true;
-  }
+  return await sendEmail(
+    to,
+    `Verification Request for OJT Hours from ${userName}`,
+    html,
+  );
 }

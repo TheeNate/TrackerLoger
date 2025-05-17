@@ -1,10 +1,13 @@
 import { jsPDF } from "jspdf";
-import "jspdf-autotable";
+import 'jspdf-autotable';
 import { Entry, User, NDTMethod } from "@shared/schema";
 
-type ExtendedJsPDF = jsPDF & {
-  autoTable: Function;
-};
+// Fix for TypeScript to recognize autoTable as part of jsPDF
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF;
+  }
+}
 
 // Function to generate PDF from verified entries
 export const generatePdf = async (
@@ -16,7 +19,7 @@ export const generatePdf = async (
     orientation: "landscape",
     unit: "mm",
     format: "a4",
-  }) as ExtendedJsPDF;
+  });
   
   // Set fonts
   doc.setFont("helvetica");
