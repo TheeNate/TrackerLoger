@@ -1,0 +1,104 @@
+2025-05-17 16:31:58.65
+d1225378
+User
+SendGrid API key configured
+2025-05-17 16:31:58.71
+d1225378
+User
+11:31:58 PM [express] serving on port 5000
+2025-05-17 16:32:36.59
+d1225378
+User
+11:32:36 PM [express] GET /api/user 401 in 2ms :: {"message":"Unauthorized"}
+2025-05-17 16:35:08.32
+d1225378
+User
+11:35:08 PM [express] POST /api/auth/register 201 in 735ms :: {"id":6,"email":"theeeenate@proton.me",…
+2025-05-17 16:35:09.43
+d1225378
+User
+11:35:09 PM [express] GET /api/user 401 in 1ms :: {"message":"Unauthorized"}
+2025-05-17 16:35:09.85
+d1225378
+User
+11:35:09 PM [express] GET /api/user 401 in 1ms :: {"message":"Unauthorized"}
+2025-05-17 16:35:21.73
+d1225378
+User
+11:35:21 PM [express] POST /api/auth/login 200 in 2256ms :: {"id":6,"email":"theeeenate@proton.me","n…
+2025-05-17 16:35:22.59
+d1225378
+User
+11:35:22 PM [express] GET /api/user 401 in 1ms :: {"message":"Unauthorized"}
+2025-05-17 16:35:23.11
+d1225378
+User
+11:35:23 PM [express] GET /api/user 401 in 1ms :: {"message":"Unauthorized"}
+2025-05-17 16:35:32.73
+d1225378
+User
+11:35:32 PM [express] GET /api/user 401 in 0ms :: {"message":"Unauthorized"}
+2025-05-17 16:35:41.62
+d1225378
+User
+11:35:41 PM [express] GET /api/user 401 in 1ms :: {"message":"Unauthorized"}
+2025-05-17 16:35:48.57
+d1225378
+User
+11:35:48 PM [express] GET /api/user 401 in 1ms :: {"message":"Unauthorized"}
+2025-05-17 16:35:49.18
+d1225378
+User
+11:35:49 PM [express] GET /api/user 401 in 0ms :: {"message":"Unauthorized"}
+2025-05-17 16:36:36.90
+d1225378
+User
+11:36:36 PM [express] GET /api/user 401 in 1ms :: {"message":"Unauthorized"}
+2025-05-17 16:36:41.71
+d1225378
+User
+11:36:41 PM [express] POST /api/auth/login 200 in 240ms :: {"id":6,"email":"theeeenate@proton.me","na…
+2025-05-17 16:36:42.42
+d1225378
+User
+11:36:42 PM [express] GET /api/user 401 in 0ms :: {"message":"Unauthorized"}
+2025-05-17 16:36:43.00
+d1225378
+User
+11:36:43 PM [express] GET /api/user 401 in 1ms :: {"message":"Unauthorized"}
+2025-05-17 16:37:17.80
+d1225378
+User
+11:37:17 PM [express] GET /api/user 401 in 0ms :: {"message":"Unauthorized"}
+2025-05-17 16:37:18.35
+d1225378
+User
+11:37:18 PM [express] GET /api/user 401 in 1ms :: {"message":"Unauthorized"}
+2025-05-17 16:39:28.07
+d1225378
+User
+11:39:28 PM [express] POST /api/auth/login 200 in 2577ms :: {"id":3,"email":"natyb123@gmail.com","nam…
+2025-05-17 16:39:28.80
+d1225378
+User
+11:39:28 PM [express] GET /api/user 401 in 1ms :: {"message":"Unauthorized"}
+2025-05-17 16:39:28.91
+d1225378
+User
+11:39:28 PM [express] GET /api/user 401 in 1ms :: {"message":"Unauthorized"}
+2025-05-17 16:39:35.68
+d1225378
+User
+11:39:35 PM [express] GET /api/user 401 in 0ms :: {"message":"Unauthorized"}
+2025-05-17 16:41:10.51
+d1225378
+User
+11:41:10 PM [express] POST /api/auth/login 200 in 718ms :: {"id":3,"email":"natyb123@gmail.com","name…
+2025-05-17 16:41:11.01
+d1225378
+User
+11:41:11 PM [express] GET /api/user 401 in 1ms :: {"message":"Unauthorized"}
+2025-05-17 16:41:11.15
+d1225378
+User
+11:41:11 PM [express] GET /api/user 401 in 1ms :: {"message":"Unauthorized"}

@@ -25,6 +25,13 @@ declare module "express-session" {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup session
   const PgSession = PgStore(session);
+  const isProduction = process.env.NODE_ENV === "production";
+  
+  // Get domain for proper cookie setting
+  const domain = process.env.REPLIT_DOMAINS ? 
+    process.env.REPLIT_DOMAINS.split(',')[0].replace(/^https?:\/\//, '') : 
+    undefined;
+    
   app.use(
     session({
       store: new PgSession({
@@ -36,14 +43,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: process.env.NODE_ENV === "production",
+        secure: isProduction,
+        sameSite: 'lax',
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        domain: isProduction ? domain : undefined,
+        httpOnly: true
       },
+      proxy: isProduction, // trust the reverse proxy when in production
     })
   );
+  
+  // Log session configuration
+  console.log(`Session configured with domain: ${domain || 'localhost'}, secure: ${isProduction}`);
+  
+  // Set up CORS
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'X-Requested-With, X-HTTP-Method-Override, Content-Type, Accept');
+    next();
+  });
 
   // Authentication middleware
   const requireAuth = (req: Request, res: Response, next: Function) => {
+    console.log(`Authentication check: session ID ${req.session.id}, user ID: ${req.session.userId || 'not set'}`);
+    
     if (!req.session.userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -116,10 +141,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Login successful
       req.session.userId = user.id;
+      console.log(`Login successful for user ${user.id}, setting session ID: ${req.session.id}`);
       
-      // Send user data (excluding password)
-      const { password: _, ...userWithoutPassword } = user;
-      res.json(userWithoutPassword);
+      // Save session explicitly before responding
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ message: "Error saving session" });
+        }
+        
+        // Send user data (excluding password) after session is saved
+        const { password: _, ...userWithoutPassword } = user;
+        res.json(userWithoutPassword);
+      });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ message: "Error during login" });
