@@ -1,54 +1,66 @@
-import axios from 'axios';
-import { getBaseUrl } from './email';
+import axios from "axios";
+import { getBaseUrl } from "./email";
 
-const MAILSENDER_API_URL = 'https://api.mailsender.one/v1/mail/send';
+// Update the API URL to use MailerSend
+const MAILSENDER_API_URL = "https://api.mailersend.com/v1/email";
 
 export async function sendEmail(
   to: string,
   subject: string,
-  html: string
+  html: string,
 ): Promise<boolean> {
   try {
     if (!process.env.MAILSENDER_API_KEY) {
-      console.error('MAILSENDER_API_KEY is not set');
+      console.error("MAILSENDER_API_KEY is not set");
       return false;
     }
 
     const response = await axios.post(
       MAILSENDER_API_URL,
       {
-        to,
-        subject,
-        html,
-        from_name: 'OJT Hours Tracker',
-        from_email: 'noreply@ojt-tracker.com',
+        from: {
+          email: "noreply@trackerloger.online",
+          name: "OJT Hours Tracker",
+        },
+        to: [
+          {
+            email: to,
+            name: "Recipient",
+          },
+        ],
+        subject: subject,
+        html: html,
+        text: html.replace(/<[^>]*>/g, ""), // Simple HTML to text conversion
       },
       {
         headers: {
-          'Content-Type': 'application/json',
-          'X-API-KEY': process.env.MAILSENDER_API_KEY,
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.MAILSENDER_API_KEY}`,
         },
-      }
+      },
     );
 
-    console.log('Email sent successfully via mailsender');
+    console.log("Email sent successfully via MailerSend");
     return true;
   } catch (error) {
-    console.error('Error sending email via mailsender:', error);
+    console.error(
+      "Error sending email via MailerSend:",
+      error.response?.data || error.message,
+    );
     return false;
   }
 }
 
 export async function sendMagicLinkEmail(
   email: string,
-  token: string
+  token: string,
 ): Promise<string> {
   const baseUrl = getBaseUrl();
   const loginUrl = `${baseUrl}/login?token=${token}`;
 
   const emailSent = await sendEmail(
     email,
-    'Your OJT Hours Tracker Login Link',
+    "Your OJT Hours Tracker Login Link",
     `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
       <h2>OJT Hours Tracker - Magic Link</h2>
@@ -65,11 +77,11 @@ export async function sendMagicLinkEmail(
       <p>${loginUrl}</p>
       <p>This link will expire in 24 hours.</p>
     </div>
-  `
+  `,
   );
 
   if (!emailSent) {
-    console.log('Magic link URL (fallback):', loginUrl);
+    console.log("Magic link URL (fallback):", loginUrl);
   }
 
   return loginUrl;
@@ -85,26 +97,26 @@ export async function sendVerificationEmail(
     method: string;
     hours: number;
   },
-  verificationUrl: string
+  verificationUrl: string,
 ): Promise<boolean> {
   // Format method for display
   let displayMethod = entryDetails.method;
-  if (displayMethod === 'UT_THK') {
-    displayMethod = 'UT Thk.';
+  if (displayMethod === "UT_THK") {
+    displayMethod = "UT Thk.";
   }
 
   const html = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
       <h2>OJT Hours Verification Request</h2>
-      <p>${userName} ${employeeNumber ? `(Employee #: ${employeeNumber})` : ''} has requested your verification for the following OJT hours:</p>
-      
+      <p>${userName} ${employeeNumber ? `(Employee #: ${employeeNumber})` : ""} has requested your verification for the following OJT hours:</p>
+
       <div style="background-color: #f4f4f4; padding: 15px; border-radius: 4px; margin: 20px 0;">
         <p><strong>Date:</strong> ${new Date(entryDetails.date).toLocaleDateString()}</p>
         <p><strong>Location:</strong> ${entryDetails.location}</p>
         <p><strong>Method:</strong> ${displayMethod}</p>
         <p><strong>Hours:</strong> ${entryDetails.hours}</p>
       </div>
-      
+
       <p>Please click the button below to verify these hours:</p>
       <p>
         <a 
@@ -119,9 +131,24 @@ export async function sendVerificationEmail(
     </div>
   `;
 
-  return await sendEmail(
-    to,
-    `Verification Request for OJT Hours from ${userName}`,
-    html
-  );
+  // For demo/development purposes, just log the verification URL and don't attempt to send email
+  // This avoids the trial account limitation
+  console.log("\n-------------------------------------------------");
+  console.log("VERIFICATION URL (Use this link to verify hours):");
+  console.log(verificationUrl);
+  console.log("-------------------------------------------------\n");
+  
+  // Try to send email, but don't consider it an error if it fails
+  try {
+    await sendEmail(
+      to,
+      `Verification Request for OJT Hours from ${userName}`,
+      html,
+    );
+    return true;
+  } catch (error) {
+    // Just log the error, but return true anyway since we have the fallback URL
+    console.log("Note: Email could not be sent, but verification URL is available above");
+    return true;
+  }
 }

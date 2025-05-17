@@ -99,10 +99,10 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry }: Sup
       const response = await apiRequest("POST", `/api/verify-request/${entry.id}`, requestData);
       const data = await response.json();
       
-      // Show success message
+      // Show success message with direct link option
       toast({
         title: "Verification request sent",
-        description: "A verification email has been sent to the supervisor.",
+        description: "A verification link has been generated. You can also share it directly if needed.",
       });
       
       // For fallback purposes, generate a link directly if there's a token
