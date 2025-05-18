@@ -1,13 +1,14 @@
 import express, { type Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import session from "express-session";
 import PgStore from "connect-pg-simple";
+import { add } from "date-fns";
 import { pool } from "./db";
 import { db } from "./db";
 import { users, entries, supervisors, type User } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { getBaseUrl, sendVerificationConfirmation, sendVerificationRequest } from "./email";
 import { insertEntrySchema, insertSupervisorSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
