@@ -91,10 +91,34 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry }: Sup
     setCopied(false);
     
     try {
-      // Submit verification request
-      const requestData = selectedSupervisor && selectedSupervisor !== "new"
-        ? { supervisorId: parseInt(selectedSupervisor) }
-        : values;
+      // Handle new supervisor creation and verification request
+      let requestData: any;
+      
+      if (selectedSupervisor && selectedSupervisor !== "new") {
+        // Using existing supervisor
+        requestData = { supervisorId: parseInt(selectedSupervisor) };
+      } else {
+        // Create a new supervisor
+        try {
+          const supervisorResponse = await apiRequest("POST", "/api/supervisors", values);
+          
+          if (!supervisorResponse.ok) {
+            throw new Error("Failed to create supervisor");
+          }
+          
+          const newSupervisor = await supervisorResponse.json();
+          requestData = { supervisorId: newSupervisor.id };
+        } catch (error) {
+          console.error("Error creating supervisor:", error);
+          toast({
+            title: "Error",
+            description: "Failed to create supervisor. Please try again.",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
+      }
       
       const response = await apiRequest("POST", `/api/verify-request/${entry.id}`, requestData);
       const data = await response.json();
