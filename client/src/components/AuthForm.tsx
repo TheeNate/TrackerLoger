@@ -56,15 +56,35 @@ export function AuthForm() {
     setError(null);
     
     try {
-      const response = await apiRequest("POST", "/api/auth/login", values);
+      // Make a normal fetch request instead of using apiRequest to get proper response access
+      const response = await fetch("/api/auth/login", {
+        method: "POST", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+        credentials: "include"
+      });
       
+      // Check for error response
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || "Login failed");
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Login failed");
       }
       
-      // Login successful
-      setLocation("/profile");
+      // Parse successful response
+      const userData = await response.json();
+      console.log("Login successful, user data:", userData);
+      
+      // Wait to make sure everything is updated
+      setTimeout(() => {
+        // Redirect based on admin status
+        if (userData && userData.isAdmin) {
+          console.log("User is admin, redirecting to admin page");
+          window.location.href = "/admin";
+        } else {
+          console.log("User is not admin, redirecting to profile page");
+          window.location.href = "/profile";
+        }
+      }, 500);
     } catch (err) {
       console.error("Login error:", err);
       setError(err instanceof Error ? err.message : "An unexpected error occurred");
