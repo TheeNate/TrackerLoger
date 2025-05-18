@@ -9,7 +9,7 @@ import { pool } from "./db";
 import { db } from "./db";
 import { users, entries, supervisors, type User } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
-import { getBaseUrl, sendVerificationConfirmation, sendVerificationRequest } from "./email";
+import { getBaseUrl, sendEmail, sendVerificationConfirmation, sendVerificationRequest } from "./email";
 import { insertEntrySchema, insertSupervisorSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
 import { compare, hash } from 'bcrypt';
@@ -168,6 +168,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json({ message: "Logged out successfully" });
     });
+  });
+  
+  // Password reset request
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+      
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      
+      // Even if user not found, return success to prevent email enumeration
+      if (!user) {
+        return res.json({ message: "If your email exists in our system, you will receive a password reset link" });
+      }
+      
+      // Generate reset token and set expiry (1 hour from now)
+      const resetToken = randomUUID();
+      const resetTokenExpiry = add(new Date(), { hours: 1 });
+      
+      // Save token to user record
+      await db
+        .update(users)
+        .set({ 
+          resetToken, 
+          resetTokenExpiry 
+        })
+        .where(eq(users.id, user.id));
+      
+      // Create reset URL
+      const baseUrl = getBaseUrl();
+      const resetUrl = `${baseUrl}/reset-password/${resetToken}`;
+      
+      // Create email HTML
+      const html = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>OJT Hours Tracker - Password Reset</h2>
+          <p>You recently requested to reset your password. Click the button below to reset it:</p>
+          
+          <p>
+            <a 
+              href="${resetUrl}" 
+              style="display: inline-block; padding: 10px 20px; background-color: #42be65; color: white; text-decoration: none; border-radius: 4px;"
+            >
+              Reset Password
+            </a>
+          </p>
+          <p>Or copy and paste this URL into your browser:</p>
+          <p>${resetUrl}</p>
+          
+          <p>This link will expire in 1 hour. If you did not request a password reset, you can safely ignore this email.</p>
+        </div>
+      `;
+      
+      // Send email
+      const emailSent = await sendEmail(
+        user.email,
+        "Reset your OJT Hours Tracker password",
+        html
+      );
+      
+      // Log reset token for debugging
+      console.log(`Password reset requested for ${user.email}. Reset URL: ${resetUrl}`);
+      
+      if (!emailSent) {
+        console.log("Failed to send password reset email, but token is valid");
+      }
+      
+      res.json({ message: "If your email exists in our system, you will receive a password reset link" });
+    } catch (error) {
+      console.error("Password reset request error:", error);
+      res.status(500).json({ message: "Error processing password reset request" });
+    }
+  });
+  
+  // Validate reset token and set new password
+  app.post("/api/auth/reset-password/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { password } = req.body;
+      
+      if (!token || !password) {
+        return res.status(400).json({ message: "Token and password are required" });
+      }
+      
+      // Find user by token and check if token is still valid
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(
+          and(
+            eq(users.resetToken, token),
+            isNull(users.resetTokenExpiry).not()
+          )
+        );
+      
+      if (!user || new Date(user.resetTokenExpiry!) < new Date()) {
+        return res.status(400).json({ message: "Invalid or expired token" });
+      }
+      
+      // Hash new password
+      const hashedPassword = await hash(password, 10);
+      
+      // Update user with new password and clear reset token
+      await db
+        .update(users)
+        .set({ 
+          password: hashedPassword, 
+          resetToken: null, 
+          resetTokenExpiry: null 
+        })
+        .where(eq(users.id, user.id));
+      
+      res.json({ message: "Password reset successful" });
+    } catch (error) {
+      console.error("Password reset error:", error);
+      res.status(500).json({ message: "Error resetting password" });
+    }
   });
 
   // User routes
