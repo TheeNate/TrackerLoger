@@ -1,44 +1,48 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { apiRequest } from "@/lib/queryClient";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  loginFormSchema,
-  registerFormSchema,
-  type LoginFormValues,
-  type RegisterFormValues,
-} from "@/types";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { apiRequest } from "@/lib/queryClient";
+import { Loader2 } from "lucide-react";
+
+// Form validation schemas
+const loginSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(1, "Password is required"),
+});
+
+const registerSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  name: z.string().optional(),
+  employeeNumber: z.string().optional(),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
+type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export function AuthForm() {
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Login form
   const loginForm = useForm<LoginFormValues>({
-    resolver: zodResolver(loginFormSchema),
+    resolver: zodResolver(loginSchema),
     defaultValues: {
       email: "",
       password: "",
     },
   });
 
-  // Register form
   const registerForm = useForm<RegisterFormValues>({
-    resolver: zodResolver(registerFormSchema),
+    resolver: zodResolver(registerSchema),
     defaultValues: {
       email: "",
       password: "",
@@ -48,202 +52,234 @@ export function AuthForm() {
   });
 
   const handleLogin = async (values: LoginFormValues) => {
-    setIsLoading(true);
-
+    setLoading(true);
+    setError(null);
+    
     try {
       const response = await apiRequest("POST", "/api/auth/login", values);
       
-      // Add a slight delay to ensure the server has processed the session
-      setTimeout(() => {
-        toast({
-          title: "Login successful!",
-          description: "Welcome back to your OJT Hours Tracker.",
-        });
-        
-        // Use window.location for a hard redirect to ensure session state is refreshed
-        window.location.href = "/profile";
-      }, 100);
-    } catch (error) {
-      console.error(error);
-      toast({
-        title: "Login failed",
-        description: "Invalid email or password. Please try again.",
-        variant: "destructive",
-      });
-      setIsLoading(false);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || "Login failed");
+      }
+      
+      // Login successful
+      setLocation("/profile");
+    } catch (err) {
+      console.error("Login error:", err);
+      setError(err instanceof Error ? err.message : "An unexpected error occurred");
+    } finally {
+      setLoading(false);
     }
-    // Note: We don't call setIsLoading(false) in the success path as we're redirecting
   };
 
   const handleRegister = async (values: RegisterFormValues) => {
-    setIsLoading(true);
-
+    setLoading(true);
+    setError(null);
+    
     try {
       const response = await apiRequest("POST", "/api/auth/register", values);
       
-      // Add a slight delay to ensure the server has processed the session
-      setTimeout(() => {
-        toast({
-          title: "Registration successful!",
-          description: "Your account has been created. Welcome to OJT Hours Tracker!",
-        });
-        
-        // Use window.location for a hard redirect to ensure session state is refreshed
-        window.location.href = "/profile";
-      }, 100);
-    } catch (error) {
-      console.error(error);
-      toast({
-        title: "Registration failed",
-        description: "This email may already be registered.",
-        variant: "destructive",
-      });
-      setIsLoading(false);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || "Registration failed");
+      }
+      
+      // Registration successful
+      setLocation("/profile");
+    } catch (err) {
+      console.error("Registration error:", err);
+      setError(err instanceof Error ? err.message : "An unexpected error occurred");
+    } finally {
+      setLoading(false);
     }
-    // Note: We don't call setIsLoading(false) in the success path as we're redirecting
   };
 
   return (
-    <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
-      <div className="mb-8 text-center">
-        <h1 className="text-2xl font-semibold mb-2">OJT Hours Tracker</h1>
-        <p className="text-muted-foreground">
-          Track and verify your on-the-job training hours
-        </p>
-      </div>
-
-      <Tabs defaultValue="login" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-6">
-          <TabsTrigger value="login">Login</TabsTrigger>
-          <TabsTrigger value="register">Register</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="login">
-          <Form {...loginForm}>
-            <form
-              onSubmit={loginForm.handleSubmit(handleLogin)}
-              className="space-y-4"
-            >
-              <FormField
-                control={loginForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="your.email@example.com"
-                        type="email"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={loginForm.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input placeholder="******" type="password" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <Button
-                type="submit"
-                className="w-full mt-2"
-                disabled={isLoading}
+    <Tabs 
+      defaultValue="login" 
+      value={activeTab} 
+      onValueChange={(value) => setActiveTab(value as "login" | "register")}
+      className="w-full max-w-md"
+    >
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="login">Login</TabsTrigger>
+        <TabsTrigger value="register">Register</TabsTrigger>
+      </TabsList>
+      
+      <TabsContent value="login">
+        <Form {...loginForm}>
+          <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
+            <FormField
+              control={loginForm.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="your.email@example.com" 
+                      {...field} 
+                      autoComplete="email"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={loginForm.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="password" 
+                      placeholder="********" 
+                      {...field} 
+                      autoComplete="current-password"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            
+            <div className="space-y-2">
+              <Button 
+                type="submit" 
+                disabled={loading} 
+                className="w-full"
               >
-                {isLoading ? "Logging in..." : "Log In"}
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Logging in...
+                  </>
+                ) : (
+                  "Log in"
+                )}
               </Button>
-            </form>
-          </Form>
-        </TabsContent>
-
-        <TabsContent value="register">
-          <Form {...registerForm}>
-            <form
-              onSubmit={registerForm.handleSubmit(handleRegister)}
-              className="space-y-4"
-            >
-              <FormField
-                control={registerForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="your.email@example.com"
-                        type="email"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={registerForm.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input placeholder="******" type="password" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={registerForm.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Full Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="John Doe" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={registerForm.control}
-                name="employeeNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Employee Number (Optional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="EMP12345" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <Button
-                type="submit"
-                className="w-full mt-2"
-                disabled={isLoading}
+              
+              <Button 
+                variant="link" 
+                type="button"
+                className="w-full text-center"
+                onClick={() => setLocation("/reset-password")}
               >
-                {isLoading ? "Creating Account..." : "Create Account"}
+                Forgot password?
               </Button>
-            </form>
-          </Form>
-        </TabsContent>
-      </Tabs>
-    </div>
+            </div>
+          </form>
+        </Form>
+      </TabsContent>
+      
+      <TabsContent value="register">
+        <Form {...registerForm}>
+          <form onSubmit={registerForm.handleSubmit(handleRegister)} className="space-y-4">
+            <FormField
+              control={registerForm.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="your.email@example.com" 
+                      {...field} 
+                      autoComplete="email"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={registerForm.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="password" 
+                      placeholder="********" 
+                      {...field} 
+                      autoComplete="new-password"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={registerForm.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Full Name (Optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="John Doe" 
+                      {...field} 
+                      autoComplete="name"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={registerForm.control}
+              name="employeeNumber"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Employee Number (Optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="EMP123456" 
+                      {...field} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            
+            <Button 
+              type="submit" 
+              disabled={loading} 
+              className="w-full"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Registering...
+                </>
+              ) : (
+                "Register"
+              )}
+            </Button>
+          </form>
+        </Form>
+      </TabsContent>
+    </Tabs>
   );
 }
