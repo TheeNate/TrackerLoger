@@ -18,7 +18,8 @@ export const getBaseUrl = () => {
     process.env.REPLIT_DOMAINS.split(',')[0] : 
     'localhost:5000';
   
-  const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+  // Always use HTTPS for Replit domains to ensure links work properly in emails
+  const protocol = process.env.REPLIT_DOMAINS ? 'https' : 'http';
   return `${protocol}://${domain}`;
 };
 

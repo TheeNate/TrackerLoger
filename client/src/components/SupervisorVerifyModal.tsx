@@ -131,7 +131,12 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry }: Sup
       
       // For fallback purposes, generate a link directly if there's a token
       if (data.entry && data.entry.verificationToken) {
-        const baseUrl = window.location.origin;
+        // Make sure we always use HTTPS for verification links
+        const baseUrlParts = window.location.origin.split("://");
+        const hostname = baseUrlParts[baseUrlParts.length - 1];
+        const protocol = baseUrlParts[0] === "http" && hostname.includes("replit") ? "https" : baseUrlParts[0];
+        const baseUrl = `${protocol}://${hostname}`;
+        
         const url = `${baseUrl}/verify/${data.entry.verificationToken}`;
         setVerificationUrl(url);
       } else {
