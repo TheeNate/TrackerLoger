@@ -56,8 +56,13 @@ export async function sendVerificationRequest(
   user: User,
   entry: Entry
 ): Promise<boolean> {
-  const baseUrl = getBaseUrl();
-  const verificationUrl = `${baseUrl}/verify/${entry.verificationToken}`;
+  // Ensure we always use HTTPS for verification links
+  const domain = process.env.REPLIT_DOMAINS ? 
+    process.env.REPLIT_DOMAINS.split(',')[0] : 
+    'localhost:5000';
+  
+  // Always force HTTPS for verification links
+  const verificationUrl = `https://${domain}/verify/${entry.verificationToken}`;
   
   // Display verification URL in logs for testing/debugging
   console.log("\n-------------------------------------------------");
