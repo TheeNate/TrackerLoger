@@ -572,7 +572,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/verify/:token", async (req, res) => {
+  // Define routes both with and without the /api prefix to handle both frontend and email links
+  app.get(["/api/verify/:token", "/verify/:token"], async (req, res) => {
     try {
       const { token } = req.params;
 
@@ -602,7 +603,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/verify/:token", async (req, res) => {
+  app.post(["/api/verify/:token", "/verify/:token"], async (req, res) => {
     try {
       const { token } = req.params;
       const { supervisorName } = req.body;

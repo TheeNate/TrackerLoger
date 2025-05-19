@@ -101,7 +101,21 @@ export default function VerifyPage() {
     );
   }
   
-  const { entry, user } = data;
+  // Type guard to ensure data has the expected structure
+  if (!data || !('entry' in data) || !('user' in data)) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md text-center">
+          <h1 className="text-2xl font-semibold mb-2">Invalid Data Format</h1>
+          <p className="text-neutral-500">
+            The verification data appears to be in an invalid format. Please try again or contact support.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  
+  const { entry, user } = data as { entry: any; user: any };
   
   // Format method for display
   let displayMethod = entry.method;
