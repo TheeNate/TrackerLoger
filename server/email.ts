@@ -18,9 +18,8 @@ export const getBaseUrl = () => {
     process.env.REPLIT_DOMAINS.split(',')[0] : 
     'localhost:5000';
   
-  // Always use HTTPS for Replit domains to ensure links work properly in emails
-  const protocol = process.env.REPLIT_DOMAINS ? 'https' : 'http';
-  return `${protocol}://${domain}`;
+  // Always use HTTPS for verification links
+  return `https://${domain}`;
 };
 
 // Send email with SendGrid
