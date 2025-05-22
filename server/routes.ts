@@ -532,10 +532,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const verificationToken = randomUUID();
 
       // Update entry with verification token
-      await db
+      const [updatedEntry] = await db
         .update(entries)
         .set({ verificationToken })
-        .where(eq(entries.id, entry.id));
+        .where(eq(entries.id, entry.id))
+        .returning();
 
       // Get user data
       const user = await storage.getUser(userId);
@@ -552,8 +553,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(verificationUrl);
       console.log("-------------------------------------------------\n");
 
-      // Send verification email using SendGrid
-      const emailSent = await sendVerificationRequest(supervisor, user!, entry);
+      // Send verification email using SendGrid with the updated entry
+      const emailSent = await sendVerificationRequest(supervisor, user!, updatedEntry);
 
       if (!emailSent) {
         console.log(
@@ -565,6 +566,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Verification request sent",
         supervisor,
         verificationUrl,
+        entry: updatedEntry,
       });
     } catch (error) {
       console.error(error);
