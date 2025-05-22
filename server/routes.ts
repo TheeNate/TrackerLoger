@@ -76,13 +76,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set up CORS
   app.use((req, res, next) => {
     const origin = req.headers.origin || "";
-    // Allow verification endpoints without credentials
-    if (req.path.startsWith('/verify/')) {
-      res.header("Access-Control-Allow-Origin", "*");
-    } else {
-      res.header("Access-Control-Allow-Origin", origin);
-      res.header("Access-Control-Allow-Credentials", "true");
-    }
+    res.header("Access-Control-Allow-Origin", origin);
+    res.header("Access-Control-Allow-Credentials", "true");
     res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS");
     res.header(
       "Access-Control-Allow-Headers",
