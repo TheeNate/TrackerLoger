@@ -42,10 +42,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const PgSession = PgStore(session);
   const isProduction = process.env.NODE_ENV === "production";
 
-  // Get domain for proper cookie setting
+  // Get domain for proper cookie setting - be more flexible with domain handling
   const domain = process.env.REPLIT_DOMAINS
     ? process.env.REPLIT_DOMAINS.split(",")[0].replace(/^https?:\/\//, "")
     : undefined;
+
+  // Don't set domain in cookie for development or if domain detection fails
+  const shouldSetDomain = isProduction && domain && !domain.includes("replit.dev");
 
   app.use(
     session({
@@ -58,13 +61,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: isProduction,
+        secure: false, // Allow both HTTP and HTTPS for flexibility
         sameSite: "lax",
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        domain: isProduction ? domain : undefined,
+        domain: shouldSetDomain ? domain : undefined,
         httpOnly: true,
       },
-      proxy: isProduction, // trust the reverse proxy when in production
+      proxy: true, // trust the reverse proxy
     }),
   );
 
