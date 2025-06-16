@@ -42,14 +42,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const PgSession = PgStore(session);
   const isProduction = process.env.NODE_ENV === "production";
 
-  // Get domain for proper cookie setting - be more flexible with domain handling
-  const domain = process.env.REPLIT_DOMAINS
-    ? process.env.REPLIT_DOMAINS.split(",")[0].replace(/^https?:\/\//, "")
-    : undefined;
-
-  // Don't set domain in cookie for development or if domain detection fails
-  const shouldSetDomain = isProduction && domain && !domain.includes("replit.dev");
-
+  // Don't set a specific domain for cookies to work across multiple domains
+  // This allows sessions to work on both trackerloger.online and replit.app domains
   app.use(
     session({
       store: new PgSession({
@@ -61,10 +55,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: false, // Allow both HTTP and HTTPS for flexibility
+        secure: false, // Allow both HTTP and HTTPS
         sameSite: "lax",
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        domain: shouldSetDomain ? domain : undefined,
+        domain: undefined, // No domain restriction to work across all domains
         httpOnly: true,
       },
       proxy: true, // trust the reverse proxy
@@ -73,7 +67,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Log session configuration
   console.log(
-    `Session configured with domain: ${domain || "localhost"}, secure: ${isProduction}`,
+    `Session configured with no domain restriction for cross-domain compatibility, secure: ${isProduction}`,
   );
 
   // Set up CORS
