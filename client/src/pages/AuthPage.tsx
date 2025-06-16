@@ -13,14 +13,28 @@ export default function AuthPage() {
   const { data: user, isLoading } = useQuery({
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
+    retry: false,
   });
   
-  // Redirect to profile if already logged in
+  // Redirect to appropriate page if already logged in
   useEffect(() => {
     if (user && !isLoading) {
-      setLocation("/profile");
+      if ((user as any).isAdmin) {
+        setLocation("/admin");
+      } else {
+        setLocation("/profile");
+      }
     }
   }, [user, isLoading, setLocation]);
+  
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
+      </div>
+    );
+  }
   
   return (
     <div className="flex min-h-screen bg-gray-50">

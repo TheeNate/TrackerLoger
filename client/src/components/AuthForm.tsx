@@ -74,17 +74,15 @@ export function AuthForm() {
       const userData = await response.json();
       console.log("Login successful, user data:", userData);
       
-      // Wait to make sure everything is updated
+      // Force a page reload to ensure proper session state
+      // This prevents the login loop by ensuring all components refresh their auth state
       setTimeout(() => {
-        // Redirect based on admin status
         if (userData && userData.isAdmin) {
-          console.log("User is admin, redirecting to admin page");
           window.location.href = "/admin";
         } else {
-          console.log("User is not admin, redirecting to profile page");
           window.location.href = "/profile";
         }
-      }, 500);
+      }, 100);
     } catch (err) {
       console.error("Login error:", err);
       setError(err instanceof Error ? err.message : "An unexpected error occurred");
