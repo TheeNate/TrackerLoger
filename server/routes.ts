@@ -95,9 +95,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   });
 
-  // Rest of your routes...
-}
-
   // Authentication middleware
   const requireAuth = (req: Request, res: Response, next: Function) => {
     console.log(
