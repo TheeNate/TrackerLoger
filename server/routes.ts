@@ -37,13 +37,16 @@ declare module "express-session" {
   }
 }
 
+// In server/routes.ts, replace the session configuration with this:
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup session
   const PgSession = PgStore(session);
   const isProduction = process.env.NODE_ENV === "production";
 
-  // Don't set a specific domain for cookies to work across multiple domains
-  // This allows sessions to work on both trackerloger.online and replit.app domains
+  // Detect if we're running on the custom domain
+  const isCustomDomain = process.env.REPLIT_DOMAINS?.includes('trackerloger.online') || false;
+
   app.use(
     session({
       store: new PgSession({
@@ -55,24 +58,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: false, // Allow both HTTP and HTTPS
+        // Use secure cookies for HTTPS domains (your custom domain)
+        secure: isCustomDomain || isProduction,
         sameSite: "lax",
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        domain: undefined, // No domain restriction to work across all domains
+        domain: undefined, // No domain restriction
         httpOnly: true,
       },
       proxy: true, // trust the reverse proxy
     }),
   );
 
-  // Log session configuration
-  console.log(
-    `Session configured with no domain restriction for cross-domain compatibility, secure: ${isProduction}`,
-  );
+  // Enhanced logging
+  console.log(`Session configured:
+    - Custom domain detected: ${isCustomDomain}
+    - Secure cookies: ${isCustomDomain || isProduction}
+    - Production mode: ${isProduction}
+    - Available domains: ${process.env.REPLIT_DOMAINS || 'none'}
+  `);
 
-  // Set up CORS
+  // Enhanced CORS setup for custom domain
   app.use((req, res, next) => {
     const origin = req.headers.origin || "";
+    const host = req.headers.host || "";
+
+    console.log(`Request from host: ${host}, origin: ${origin}`);
+
+    // Always allow the request origin for CORS
     res.header("Access-Control-Allow-Origin", origin);
     res.header("Access-Control-Allow-Credentials", "true");
     res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS");
@@ -82,6 +94,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
     next();
   });
+
+  // Rest of your routes...
+}
 
   // Authentication middleware
   const requireAuth = (req: Request, res: Response, next: Function) => {
