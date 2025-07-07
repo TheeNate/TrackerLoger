@@ -113,7 +113,7 @@ export function MagicLink() {
         <div className="mt-6">
           <div className="bg-muted p-4 rounded-md">
             <p className="text-center text-sm text-muted-foreground mb-3">
-              Email delivery failed (SendGrid requires verified sender), but you can use this direct link:
+              Email delivery failed, but you can use this direct link:
             </p>
             <Button 
               onClick={handleDirectLogin} 

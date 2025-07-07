@@ -563,7 +563,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(verificationUrl);
       console.log("-------------------------------------------------\n");
 
-      // Send verification email using SendGrid with the updated entry
+      // Send verification email using Resend with the updated entry
       const emailSent = await sendVerificationRequest(supervisor, user!, updatedEntry);
 
       if (!emailSent) {

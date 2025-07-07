@@ -20,7 +20,7 @@ This is a web application that digitizes the functionality of an OJT (On-the-Job
 - **Language**: TypeScript with ES modules
 - **Session Management**: Express sessions with PostgreSQL store
 - **Authentication**: Password-based auth with bcrypt hashing
-- **Email Service**: SendGrid for transactional emails
+- **Email Service**: Resend for transactional emails
 - **Development**: Hot reload with Vite middleware integration
 
 ### Database Architecture
@@ -78,7 +78,7 @@ This is a web application that digitizes the functionality of an OJT (On-the-Job
 ### Core Dependencies
 - **@neondatabase/serverless**: PostgreSQL database connectivity
 - **drizzle-orm**: Type-safe database operations
-- **@sendgrid/mail**: Email delivery service
+- **resend**: Email delivery service
 - **bcrypt**: Password hashing and verification
 - **express-session**: Session management
 - **connect-pg-simple**: PostgreSQL session store
@@ -114,18 +114,19 @@ This is a web application that digitizes the functionality of an OJT (On-the-Job
 
 ### Environment Configuration
 - **DATABASE_URL**: PostgreSQL connection string (required)
-- **SENDGRID_API_KEY**: Email service API key (optional, falls back to direct links)
+- **RESEND_API_KEY**: Email service API key (optional, falls back to direct links)
 - **SESSION_SECRET**: Session encryption key (auto-generated if not provided)
 - **NODE_ENV**: Environment mode (development/production)
 
 ### Known Issues
 - PDF generation occasionally fails in development due to library conflicts
 - SelectItem component errors with Radix UI in some scenarios
-- Email delivery may fail without proper SendGrid configuration
+- Email delivery may fail without proper Resend configuration
 
 ## Changelog
 
 - July 07, 2025. Initial setup
+- July 07, 2025. Migrated email service from SendGrid to Resend
 
 ## User Preferences
 

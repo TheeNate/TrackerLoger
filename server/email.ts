@@ -1,12 +1,13 @@
 import { Entry, User, Supervisor } from '@shared/schema';
-import sgMail from '@sendgrid/mail';
+import { Resend } from 'resend';
 
-// Configure SendGrid
-if (!process.env.SENDGRID_API_KEY) {
-  console.warn('SENDGRID_API_KEY not found, emails will not be sent');
+// Configure Resend
+let resend: Resend | null = null;
+if (!process.env.RESEND_API_KEY) {
+  console.warn('RESEND_API_KEY not found, emails will not be sent');
 } else {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-  console.log('SendGrid API key configured');
+  resend = new Resend(process.env.RESEND_API_KEY);
+  console.log('Resend API key configured');
 }
 
 // Default sender email using verified domain
@@ -22,29 +23,31 @@ export const getBaseUrl = () => {
   return `https://${domain}`;
 };
 
-// Send email with SendGrid
+// Send email with Resend
 export async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   try {
-    if (!process.env.SENDGRID_API_KEY) {
-      console.error('SENDGRID_API_KEY not set');
+    if (!resend) {
+      console.error('RESEND_API_KEY not set');
       return false;
     }
 
-    await sgMail.send({
-      to,
-      from: {
-        email: DEFAULT_FROM_EMAIL,
-        name: 'OJT Hours Tracker'
-      },
+    const { data, error } = await resend.emails.send({
+      from: `OJT Hours Tracker <${DEFAULT_FROM_EMAIL}>`,
+      to: [to],
       subject,
       html,
       text: html.replace(/<[^>]*>/g, '') // Simple HTML to text conversion
     });
 
-    console.log('Email sent successfully via SendGrid');
+    if (error) {
+      console.error('Error sending email via Resend:', error);
+      return false;
+    }
+
+    console.log('Email sent successfully via Resend:', data?.id);
     return true;
   } catch (error: any) {
-    console.error('Error sending email via SendGrid:', error.response?.body || error.message);
+    console.error('Error sending email via Resend:', error.message);
     return false;
   }
 }
