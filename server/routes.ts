@@ -584,8 +584,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Define routes both with and without the /api prefix to handle both frontend and email links
-  app.get(["/api/verify/:token", "/verify/:token"], async (req, res) => {
+  // API route for getting verification data
+  app.get("/api/verify/:token", async (req, res) => {
     try {
       const { token } = req.params;
 
@@ -615,7 +615,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post(["/api/verify/:token", "/verify/:token"], async (req, res) => {
+
+
+  app.post("/api/verify/:token", async (req, res) => {
     try {
       const { token } = req.params;
       const { supervisorName } = req.body;
