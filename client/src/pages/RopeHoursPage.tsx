@@ -64,35 +64,28 @@ export default function RopeHoursPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await apiRequest("/api/rope-hours", {
-        method: "POST",
-        body: {
-          startDate,
-          endDate,
-          location,
-          skills,
-          hours: parseFloat(hours),
-        },
+      const response = await apiRequest("POST", "/api/rope-hours", {
+        startDate,
+        endDate,
+        location,
+        skills,
+        hours: parseFloat(hours),
       });
 
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: "Rope hours logged successfully",
-        });
-        
-        // Reset form
-        setStartDate("");
-        setEndDate("");
-        setLocation("");
-        setSkills("");
-        setHours("");
-        
-        // Refresh data
-        queryClient.invalidateQueries({ queryKey: ["/api/rope-hours"] });
-      } else {
-        throw new Error("Failed to log rope hours");
-      }
+      toast({
+        title: "Success",
+        description: "Rope hours logged successfully",
+      });
+      
+      // Reset form
+      setStartDate("");
+      setEndDate("");
+      setLocation("");
+      setSkills("");
+      setHours("");
+      
+      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/rope-hours"] });
     } catch (error) {
       console.error("Error logging rope hours:", error);
       toast({
@@ -107,19 +100,14 @@ export default function RopeHoursPage() {
 
   const handleVerifyRequest = async (ropeHourId: number, supervisorId: number) => {
     try {
-      const response = await apiRequest(`/api/verify-request-rope/${ropeHourId}`, {
-        method: "POST",
-        body: { supervisorId },
+      await apiRequest("POST", `/api/verify-request-rope/${ropeHourId}`, {
+        supervisorId,
       });
 
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: "Verification request sent to supervisor",
-        });
-      } else {
-        throw new Error("Failed to send verification request");
-      }
+      toast({
+        title: "Success",
+        description: "Verification request sent to supervisor",
+      });
     } catch (error) {
       console.error("Error sending verification request:", error);
       toast({
