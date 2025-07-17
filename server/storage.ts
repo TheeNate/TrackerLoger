@@ -1,8 +1,9 @@
 import { 
-  users, entries, supervisors, 
+  users, entries, supervisors, ropeHours,
   type User, type InsertUser, 
   type Entry, type InsertEntry,
-  type Supervisor, type InsertSupervisor 
+  type Supervisor, type InsertSupervisor,
+  type RopeHours, type InsertRopeHours
 } from "@shared/schema";
 
 import { db } from "./db";
@@ -21,6 +22,13 @@ export interface IStorage {
   getEntryByVerificationToken(token: string): Promise<Entry | undefined>;
   createEntry(entry: InsertEntry): Promise<Entry>;
   verifyEntry(id: number, verifiedBy: string): Promise<Entry>;
+  
+  // Rope Hours methods
+  getRopeHours(userId: number): Promise<RopeHours[]>;
+  getRopeHour(id: number): Promise<RopeHours | undefined>;
+  getRopeHourByVerificationToken(token: string): Promise<RopeHours | undefined>;
+  createRopeHour(ropeHour: InsertRopeHours): Promise<RopeHours>;
+  verifyRopeHour(id: number, verifiedBy: string): Promise<RopeHours>;
   
   // Supervisor methods
   getSupervisors(userId: number): Promise<Supervisor[]>;
@@ -87,6 +95,50 @@ export class DatabaseStorage implements IStorage {
       .where(eq(entries.id, id))
       .returning();
     return entry;
+  }
+
+  // Rope Hours methods
+  async getRopeHours(userId: number): Promise<RopeHours[]> {
+    return await db
+      .select()
+      .from(ropeHours)
+      .where(eq(ropeHours.userId, userId))
+      .orderBy(desc(ropeHours.startDate));
+  }
+
+  async getRopeHour(id: number): Promise<RopeHours | undefined> {
+    const [ropeHour] = await db.select().from(ropeHours).where(eq(ropeHours.id, id));
+    return ropeHour;
+  }
+
+  async getRopeHourByVerificationToken(token: string): Promise<RopeHours | undefined> {
+    const [ropeHour] = await db
+      .select()
+      .from(ropeHours)
+      .where(eq(ropeHours.verificationToken, token));
+    return ropeHour;
+  }
+
+  async createRopeHour(ropeHour: InsertRopeHours): Promise<RopeHours> {
+    const verificationToken = uuidv4();
+    const [newRopeHour] = await db
+      .insert(ropeHours)
+      .values({ ...ropeHour, verificationToken })
+      .returning();
+    return newRopeHour;
+  }
+
+  async verifyRopeHour(id: number, verifiedBy: string): Promise<RopeHours> {
+    const [ropeHour] = await db
+      .update(ropeHours)
+      .set({ 
+        verified: true, 
+        verifiedBy, 
+        verifiedAt: new Date() 
+      })
+      .where(eq(ropeHours.id, id))
+      .returning();
+    return ropeHour;
   }
 
   // Supervisor methods

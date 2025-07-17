@@ -12,7 +12,7 @@ import PgStore from "connect-pg-simple";
 import { add } from "date-fns";
 import { pool } from "./db";
 import { db } from "./db";
-import { users, entries, supervisors, type User } from "@shared/schema";
+import { users, entries, supervisors, ropeHours, type User } from "@shared/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
 import {
   getBaseUrl,
@@ -24,6 +24,7 @@ import {
   insertEntrySchema,
   insertSupervisorSchema,
   insertUserSchema,
+  insertRopeHoursSchema,
 } from "@shared/schema";
 import { z } from "zod";
 import { compare, hash } from "bcrypt";
@@ -496,6 +497,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Rope Hours routes
+  app.get("/api/rope-hours", requireAuth, async (req, res) => {
+    try {
+      const ropeHours = await storage.getRopeHours(req.session.userId!);
+      res.json(ropeHours);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Error fetching rope hours" });
+    }
+  });
+
+  app.post("/api/rope-hours", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const ropeHourData = {
+        ...req.body,
+        userId,
+      };
+
+      // Ensure dates are parsed properly
+      const parsedData = insertRopeHoursSchema.parse({
+        ...ropeHourData,
+        startDate: new Date(ropeHourData.startDate),
+        endDate: new Date(ropeHourData.endDate),
+      });
+      const newRopeHour = await storage.createRopeHour(parsedData);
+
+      res.status(201).json(newRopeHour);
+    } catch (error) {
+      console.error(error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "Invalid rope hour data",
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ message: "Error creating rope hour" });
+    }
+  });
+
+  // Verification routes for rope hours
+  app.post("/api/verify-request-rope/:ropeHourId", requireAuth, async (req, res) => {
+    try {
+      const { ropeHourId } = req.params;
+      const userId = req.session.userId!;
+
+      // Get rope hour
+      const ropeHour = await storage.getRopeHour(parseInt(ropeHourId));
+      if (!ropeHour) {
+        return res.status(404).json({ message: "Rope hour not found" });
+      }
+
+      // Check if rope hour belongs to user
+      if (ropeHour.userId !== userId) {
+        return res
+          .status(403)
+          .json({ message: "Unauthorized: Rope hour does not belong to you" });
+      }
+
+      // Check if rope hour is already verified
+      if (ropeHour.verified) {
+        return res.status(400).json({ message: "Rope hour already verified" });
+      }
+
+      // Get supervisor
+      const { supervisorId } = req.body;
+      if (!supervisorId) {
+        return res.status(400).json({ message: "Supervisor ID is required" });
+      }
+
+      const supervisor = await storage.getSupervisor(parseInt(supervisorId));
+      if (!supervisor) {
+        return res.status(404).json({ message: "Supervisor not found" });
+      }
+
+      // Check if supervisor belongs to user
+      if (supervisor.userId !== userId) {
+        return res
+          .status(403)
+          .json({ message: "Unauthorized: Supervisor does not belong to you" });
+      }
+
+      // Generate verification token
+      const verificationToken = randomUUID();
+
+      // Update rope hour with verification token
+      const [updatedRopeHour] = await db
+        .update(ropeHours)
+        .set({ verificationToken })
+        .where(eq(ropeHours.id, ropeHour.id))
+        .returning();
+
+      // Get user data
+      const user = await storage.getUser(userId);
+
+      // Create verification URL
+      const baseUrl = getBaseUrl();
+      const verificationUrl = `${baseUrl}/verify/${verificationToken}`;
+
+      // Log verification URL for debugging
+      console.log("-------------------------------------------------");
+      console.log(
+        "VERIFICATION LINK (For testing):",
+      );
+      console.log(verificationUrl);
+      console.log("-------------------------------------------------\n");
+
+      // Send verification email using Resend with the updated rope hour
+      const emailSent = await sendVerificationRequest(supervisor, user!, updatedRopeHour);
+
+      if (!emailSent) {
+        console.log(
+          "Email delivery failed, but verification URL is available in logs above",
+        );
+      }
+
+      res.json({ message: "Verification request sent" });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Error sending verification request" });
+    }
+  });
+
   // Verification routes
   app.post("/api/verify-request/:entryId", requireAuth, async (req, res) => {
     try {
@@ -589,26 +713,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { token } = req.params;
 
-      // Get entry by verification token
+      // Try to get entry by verification token first
       const entry = await storage.getEntryByVerificationToken(token);
-      if (!entry) {
-        return res.status(404).json({ message: "Invalid verification token" });
+      if (entry) {
+        // Check if entry is already verified
+        if (entry.verified) {
+          return res.status(400).json({ message: "Entry already verified" });
+        }
+
+        // Get user and supervisors
+        const user = await storage.getUser(entry.userId);
+        const supervisors = await storage.getSupervisors(entry.userId);
+
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        return res.json({ entry, user, supervisors, type: "entry" });
       }
 
-      // Check if entry is already verified
-      if (entry.verified) {
-        return res.status(400).json({ message: "Entry already verified" });
+      // Try to get rope hour by verification token
+      const ropeHour = await storage.getRopeHourByVerificationToken(token);
+      if (ropeHour) {
+        // Check if rope hour is already verified
+        if (ropeHour.verified) {
+          return res.status(400).json({ message: "Rope hour already verified" });
+        }
+
+        // Get user and supervisors
+        const user = await storage.getUser(ropeHour.userId);
+        const supervisors = await storage.getSupervisors(ropeHour.userId);
+
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        return res.json({ ropeHour, user, supervisors, type: "rope_hour" });
       }
 
-      // Get user and supervisors
-      const user = await storage.getUser(entry.userId);
-      const supervisors = await storage.getSupervisors(entry.userId);
-
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      res.json({ entry, user, supervisors });
+      // If neither found, return error
+      return res.status(404).json({ message: "Invalid verification token" });
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Error processing verification" });
@@ -626,30 +770,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Supervisor name is required" });
       }
 
-      // Get entry by verification token
+      // Try to get entry by verification token first
       const entry = await storage.getEntryByVerificationToken(token);
-      if (!entry) {
-        return res.status(404).json({ message: "Invalid verification token" });
+      if (entry) {
+        // Check if entry is already verified
+        if (entry.verified) {
+          return res.status(400).json({ message: "Entry already verified" });
+        }
+
+        // Verify entry
+        const verifiedEntry = await storage.verifyEntry(entry.id, supervisorName);
+
+        // Send confirmation email to user
+        const user = await storage.getUser(entry.userId);
+        if (user) {
+          await sendVerificationConfirmation(user, verifiedEntry, supervisorName);
+        }
+
+        return res.json({
+          message: "Entry verified successfully",
+          entry: verifiedEntry,
+        });
       }
 
-      // Check if entry is already verified
-      if (entry.verified) {
-        return res.status(400).json({ message: "Entry already verified" });
+      // Try to get rope hour by verification token
+      const ropeHour = await storage.getRopeHourByVerificationToken(token);
+      if (ropeHour) {
+        // Check if rope hour is already verified
+        if (ropeHour.verified) {
+          return res.status(400).json({ message: "Rope hour already verified" });
+        }
+
+        // Verify rope hour
+        const verifiedRopeHour = await storage.verifyRopeHour(ropeHour.id, supervisorName);
+
+        // Send confirmation email to user
+        const user = await storage.getUser(ropeHour.userId);
+        if (user) {
+          await sendVerificationConfirmation(user, verifiedRopeHour, supervisorName);
+        }
+
+        return res.json({
+          message: "Rope hour verified successfully",
+          ropeHour: verifiedRopeHour,
+        });
       }
 
-      // Verify entry
-      const verifiedEntry = await storage.verifyEntry(entry.id, supervisorName);
-
-      // Send confirmation email to user
-      const user = await storage.getUser(entry.userId);
-      if (user) {
-        await sendVerificationConfirmation(user, verifiedEntry, supervisorName);
-      }
-
-      res.json({
-        message: "Entry verified successfully",
-        entry: verifiedEntry,
-      });
+      // If neither found, return error
+      return res.status(404).json({ message: "Invalid verification token" });
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Error verifying entry" });

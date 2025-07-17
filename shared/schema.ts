@@ -66,6 +66,31 @@ export const insertSupervisorSchema = createInsertSchema(supervisors).pick({
   company: true,
 });
 
+// Rope Hours model
+export const ropeHours = pgTable("rope_hours", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  location: text("location").notNull(),
+  skills: text("skills").notNull(), // Text input for skills used
+  hours: real("hours").notNull(),
+  verified: boolean("verified").default(false),
+  verifiedBy: text("verified_by"),
+  verificationToken: uuid("verification_token").unique(),
+  verifiedAt: timestamp("verified_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertRopeHoursSchema = createInsertSchema(ropeHours).pick({
+  userId: true,
+  startDate: true,
+  endDate: true,
+  location: true,
+  skills: true,
+  hours: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -75,6 +100,9 @@ export type InsertEntry = z.infer<typeof insertEntrySchema>;
 
 export type Supervisor = typeof supervisors.$inferSelect;
 export type InsertSupervisor = z.infer<typeof insertSupervisorSchema>;
+
+export type RopeHours = typeof ropeHours.$inferSelect;
+export type InsertRopeHours = z.infer<typeof insertRopeHoursSchema>;
 
 // Enum of NDT methods
 export const NDTMethods = {

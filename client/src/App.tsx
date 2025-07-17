@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/use-auth";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/AuthPage";
 import ProfilePage from "@/pages/ProfilePage";
+import RopeHoursPage from "@/pages/RopeHoursPage";
 import VerifyPage from "@/pages/VerifyPage";
 import SuccessPage from "@/pages/SuccessPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
@@ -23,6 +24,11 @@ function Router() {
       <Route path="/profile">
         <ProtectedRoute>
           <ProfilePage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/rope-hours">
+        <ProtectedRoute>
+          <RopeHoursPage />
         </ProtectedRoute>
       </Route>
       <Route path="/admin">

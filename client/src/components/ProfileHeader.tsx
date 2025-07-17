@@ -4,7 +4,7 @@ import { User } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet, ClipboardList, Cable, Settings } from "lucide-react";
 import { generatePdf } from "@/lib/pdf";
 
 interface ProfileHeaderProps {
@@ -15,7 +15,7 @@ interface ProfileHeaderProps {
 export function ProfileHeader({ user, verifiedEntries }: ProfileHeaderProps) {
   const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   
   const handleLogout = async () => {
     try {
@@ -66,7 +66,7 @@ export function ProfileHeader({ user, verifiedEntries }: ProfileHeaderProps) {
     <>
       <header className="bg-white shadow-sm border-b border-neutral-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <h1 className="text-xl font-semibold text-neutral-900">OJT Hours Tracker</h1>
+          <h1 className="text-xl font-semibold text-neutral-900">Hours Tracker</h1>
           
           <div className="flex items-center space-x-4">
             <span className="text-sm text-neutral-500">{user.email}</span>
@@ -77,6 +77,53 @@ export function ProfileHeader({ user, verifiedEntries }: ProfileHeaderProps) {
               Logout
             </button>
           </div>
+        </div>
+        
+        {/* Navigation */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex space-x-8">
+            <button
+              onClick={() => setLocation("/profile")}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                location === "/profile" 
+                  ? "border-blue-500 text-blue-600" 
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <ClipboardList className="h-4 w-4" />
+                OJT Hours
+              </div>
+            </button>
+            <button
+              onClick={() => setLocation("/rope-hours")}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                location === "/rope-hours" 
+                  ? "border-blue-500 text-blue-600" 
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Cable className="h-4 w-4" />
+                Rope Hours
+              </div>
+            </button>
+            {user.isAdmin && (
+              <button
+                onClick={() => setLocation("/admin")}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  location === "/admin" 
+                    ? "border-blue-500 text-blue-600" 
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Admin
+                </div>
+              </button>
+            )}
+          </nav>
         </div>
       </header>
       
