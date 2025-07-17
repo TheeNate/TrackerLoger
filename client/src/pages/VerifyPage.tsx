@@ -57,10 +57,13 @@ export default function VerifyPage() {
         throw new Error(responseData.message || "Verification failed");
       }
       
+      // Determine verification type for success message
+      const verificationType = data && data.type === 'rope_hour' ? 'rope' : 'OJT';
+      
       // Show success message and redirect to success page
       toast({
         title: "Verification successful",
-        description: "Thank you for verifying these OJT hours.",
+        description: `Thank you for verifying these ${verificationType} hours.`,
       });
       
       // Redirect to success page with data
@@ -102,7 +105,7 @@ export default function VerifyPage() {
   }
   
   // Type guard to ensure data has the expected structure
-  if (!data || !('entry' in data) || !('user' in data)) {
+  if (!data || !('user' in data) || (!('entry' in data) && !('ropeHour' in data))) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
         <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md text-center">
@@ -115,20 +118,29 @@ export default function VerifyPage() {
     );
   }
   
-  const { entry, user } = data as { entry: any; user: any };
+  const { user, type } = data as { user: any; type: string; entry?: any; ropeHour?: any };
+  const item = data.entry || data.ropeHour;
+  const isRopeHour = type === 'rope_hour';
   
-  // Format method for display
-  let displayMethod = entry.method;
-  if (displayMethod === 'UT_THK') {
-    displayMethod = 'UT Thk.';
+  // Format method for display (only for OJT entries)
+  let displayMethod = '';
+  if (!isRopeHour && item.method) {
+    displayMethod = item.method;
+    if (displayMethod === 'UT_THK') {
+      displayMethod = 'UT Thk.';
+    }
   }
   
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-semibold mb-2">OJT Hours Verification</h1>
-          <p className="text-neutral-500">Please verify the OJT hours for the technician</p>
+          <h1 className="text-2xl font-semibold mb-2">
+            {isRopeHour ? 'Rope Hours Verification' : 'OJT Hours Verification'}
+          </h1>
+          <p className="text-neutral-500">
+            Please verify the {isRopeHour ? 'rope' : 'OJT'} hours for the technician
+          </p>
         </div>
         
         <div className="bg-neutral-100 rounded-md p-4 mb-6">
@@ -137,16 +149,31 @@ export default function VerifyPage() {
             <dd className="text-neutral-900 font-medium">{user.name}</dd>
             <dt className="text-neutral-500">Employee #:</dt>
             <dd className="text-neutral-900 font-medium">{user.employeeNumber}</dd>
-            <dt className="text-neutral-500">Date:</dt>
-            <dd className="text-neutral-900 font-medium">
-              {new Date(entry.date).toLocaleDateString()}
-            </dd>
+            
+            {isRopeHour ? (
+              <>
+                <dt className="text-neutral-500">Date Range:</dt>
+                <dd className="text-neutral-900 font-medium">
+                  {new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()}
+                </dd>
+                <dt className="text-neutral-500">Skills:</dt>
+                <dd className="text-neutral-900 font-medium">{item.skills}</dd>
+              </>
+            ) : (
+              <>
+                <dt className="text-neutral-500">Date:</dt>
+                <dd className="text-neutral-900 font-medium">
+                  {new Date(item.date).toLocaleDateString()}
+                </dd>
+                <dt className="text-neutral-500">Method:</dt>
+                <dd className="text-neutral-900 font-medium">{displayMethod}</dd>
+              </>
+            )}
+            
             <dt className="text-neutral-500">Location:</dt>
-            <dd className="text-neutral-900 font-medium">{entry.location}</dd>
-            <dt className="text-neutral-500">Method:</dt>
-            <dd className="text-neutral-900 font-medium">{displayMethod}</dd>
+            <dd className="text-neutral-900 font-medium">{item.location}</dd>
             <dt className="text-neutral-500">Hours:</dt>
-            <dd className="text-neutral-900 font-medium">{entry.hours.toFixed(1)}</dd>
+            <dd className="text-neutral-900 font-medium">{item.hours.toFixed(1)}</dd>
           </dl>
         </div>
         
