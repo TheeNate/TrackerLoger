@@ -1,9 +1,10 @@
 import { 
-  users, entries, supervisors, ropeHours,
+  users, entries, supervisors, ropeHours, userCryptoIdentities,
   type User, type InsertUser, 
   type Entry, type InsertEntry,
   type Supervisor, type InsertSupervisor,
-  type RopeHours, type InsertRopeHours
+  type RopeHours, type InsertRopeHours,
+  type UserCryptoIdentity, type InsertUserCryptoIdentity
 } from "@shared/schema";
 
 import { db } from "./db";
@@ -34,6 +35,10 @@ export interface IStorage {
   getSupervisors(userId: number): Promise<Supervisor[]>;
   getSupervisor(id: number): Promise<Supervisor | undefined>;
   createSupervisor(supervisor: InsertSupervisor): Promise<Supervisor>;
+  
+  // Crypto Identity methods
+  getUserCryptoIdentity(userId: number): Promise<UserCryptoIdentity | undefined>;
+  createUserCryptoIdentity(cryptoIdentity: InsertUserCryptoIdentity): Promise<UserCryptoIdentity>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -163,6 +168,23 @@ export class DatabaseStorage implements IStorage {
       .values(supervisor)
       .returning();
     return newSupervisor;
+  }
+
+  // Crypto Identity methods
+  async getUserCryptoIdentity(userId: number): Promise<UserCryptoIdentity | undefined> {
+    const [cryptoIdentity] = await db
+      .select()
+      .from(userCryptoIdentities)
+      .where(eq(userCryptoIdentities.userId, userId));
+    return cryptoIdentity;
+  }
+
+  async createUserCryptoIdentity(cryptoIdentity: InsertUserCryptoIdentity): Promise<UserCryptoIdentity> {
+    const [newCryptoIdentity] = await db
+      .insert(userCryptoIdentities)
+      .values(cryptoIdentity)
+      .returning();
+    return newCryptoIdentity;
   }
 }
 

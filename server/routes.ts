@@ -28,6 +28,7 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { compare, hash } from "bcrypt";
+import { createTechnicianCryptoIdentity } from "./crypto";
 
 // Extend express-session types
 declare module "express-session" {
@@ -78,21 +79,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     - Available domains: ${process.env.REPLIT_DOMAINS || 'none'}
   `);
 
-  // Enhanced CORS setup for custom domain
+  // Secure CORS setup with proper origin allowlist
   app.use((req, res, next) => {
     const origin = req.headers.origin || "";
     const host = req.headers.host || "";
 
     console.log(`Request from host: ${host}, origin: ${origin}`);
 
-    // Always allow the request origin for CORS
-    res.header("Access-Control-Allow-Origin", origin);
-    res.header("Access-Control-Allow-Credentials", "true");
+    // Create allowlist of trusted origins
+    const allowedOrigins: string[] = [];
+    
+    // Add production domain
+    if (process.env.REPLIT_DOMAINS) {
+      const domains = process.env.REPLIT_DOMAINS.split(',');
+      domains.forEach(domain => {
+        allowedOrigins.push(`https://${domain.trim()}`);
+        // Also allow HTTP for development on Replit preview URLs
+        if (domain.includes('replit.dev') || domain.includes('repl.co')) {
+          allowedOrigins.push(`http://${domain.trim()}`);
+        }
+      });
+    }
+    
+    // Add localhost for development (both localhost and 127.0.0.1 for Replit)
+    allowedOrigins.push('http://localhost:5000');
+    allowedOrigins.push('https://localhost:5000');
+    allowedOrigins.push('http://127.0.0.1:5000');
+    allowedOrigins.push('https://127.0.0.1:5000');
+    
+    // Check if origin is in allowlist
+    const isAllowedOrigin = allowedOrigins.includes(origin) || 
+                           (process.env.NODE_ENV === 'development' && origin.startsWith('http://localhost:'));
+
+    if (isAllowedOrigin) {
+      res.header("Access-Control-Allow-Origin", origin);
+      res.header("Access-Control-Allow-Credentials", "true");
+    } else {
+      // Log rejected origins for debugging
+      console.warn(`CORS: Rejected origin ${origin}. Allowed origins: ${allowedOrigins.join(', ')}`);
+    }
+    
     res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS");
     res.header(
-      "Access-Control-Allow-Headers",
-      "X-Requested-With, X-HTTP-Method-Override, Content-Type, Accept",
+      "Access-Control-Allow-Headers", 
+      "X-Requested-With, X-HTTP-Method-Override, Content-Type, Accept, Authorization"
     );
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    
     next();
   });
 
@@ -932,6 +969,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error setting up admin:", error);
     }
   };
+
+  // Crypto Identity endpoint
+  app.post("/api/crypto/identity", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      
+      // Check if user already has a crypto identity
+      const existingIdentity = await storage.getUserCryptoIdentity(userId);
+      if (existingIdentity) {
+        return res.status(400).json({ 
+          message: "User already has a crypto identity" 
+        });
+      }
+
+      // Validate request data
+      const identitySchema = z.object({
+        personalInfo: z.object({
+          fullName: z.string().min(2, "Full name required"),
+          dateOfBirth: z.string().min(1, "Date of birth required"), 
+          phoneNumber: z.string().min(10, "Phone number required"),
+        }),
+        employeeIds: z.array(z.object({
+          employeeId: z.string().min(1, "Employee ID required"),
+          company: z.string().min(1, "Company required"),
+        })).min(1, "At least one employee ID required"),
+      });
+
+      const { personalInfo, employeeIds } = identitySchema.parse(req.body);
+
+      // Create crypto identity using the crypto function
+      const cryptoIdentityData = createTechnicianCryptoIdentity(
+        userId,
+        personalInfo,
+        employeeIds.map(emp => emp.employeeId) // Extract just the employeeId strings
+      );
+
+      // Save to database
+      const newCryptoIdentity = await storage.createUserCryptoIdentity({
+        userId: cryptoIdentityData.userId,
+        publicKey: cryptoIdentityData.publicKey,
+        encryptedPrivateKey: cryptoIdentityData.encryptedPrivateKey,
+        personalInfo: cryptoIdentityData.personalInfo,
+        employeeIds: cryptoIdentityData.employeeIds,
+      });
+
+      // Return success (don't expose private key)
+      res.status(201).json({
+        message: "Crypto identity created successfully",
+        publicKey: newCryptoIdentity.publicKey,
+        personalInfo: newCryptoIdentity.personalInfo,
+        employeeIds: newCryptoIdentity.employeeIds,
+      });
+    } catch (error) {
+      console.error("Crypto identity creation error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "Invalid identity data",
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ message: "Error creating crypto identity" });
+    }
+  });
 
   // Call setup admin function
   await setupAdmin();
