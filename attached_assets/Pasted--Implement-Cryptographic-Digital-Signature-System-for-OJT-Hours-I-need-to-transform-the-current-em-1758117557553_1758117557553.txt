@@ -1,0 +1,184 @@
+# Implement Cryptographic Digital Signature System for OJT Hours
+
+I need to transform the current email-based verification system into a legally defensible digital signature system similar to DocuSign. This will use server-side PKI (Public Key Infrastructure) where users get their own cryptographic identities for signing OJT hours.
+
+## How The System Should Work
+
+### Current Problem
+Right now, when someone requests verification, we just send an email and anyone with the link can "verify" the hours. There's no cryptographic proof of who actually verified what, and entries can be tampered with after verification requests.
+
+### New Digital Signature Flow
+
+**For Technicians (First Time):**
+1. User logs hours as normal
+2. When they click "Verify Hours" for the FIRST time ever, show a modal explaining: "We're creating your digital signature certificate to legally verify your hours"
+3. Collect their identity information in the modal:
+   - Full legal name
+   - Date of birth
+   - Phone number  
+   - Employee ID and company name
+4. Send verification email with a code they need to enter
+5. Generate their personal RSA key pair on the server
+6. Encrypt and store their private key safely
+7. Show success message: "Your digital signature is ready"
+
+**For Supervisors (First Time):**
+1. Supervisor gets verification email and clicks link
+2. If they've never been in the system, show same identity creation modal
+3. Collect their professional information:
+   - Full legal name
+   - Date of birth
+   - Phone number
+   - Professional certifications (like "Level III NDT")
+   - Current company
+4. Same email verification and key generation process
+5. Then proceed with the actual hours verification
+
+**For Ongoing Verification:**
+1. When technician requests verification, their entry gets cryptographically signed with their private key
+2. The entry data gets "locked" - no more editing allowed
+3. Supervisor receives verification email 
+4. Supervisor signs the verification with their private key
+5. Both signatures get stored permanently as proof
+
+## Database Changes Needed
+
+### New Table: User Crypto Identities
+Store each user's cryptographic identity:
+- Link to user ID
+- Their public key (safe to store)
+- Their encrypted private key (encrypted with server secret)
+- Their personal info as JSON (name, birth date, phone)
+- Array of employee IDs (so they can add new ones when changing jobs)
+- Whether their identity is verified via email
+- Creation timestamp
+
+### New Table: Supervisor Crypto Identities
+Same concept but for supervisors:
+- Email address (unique identifier)
+- Public and encrypted private keys
+- Personal/professional info as JSON
+- Email verification status
+- Creation timestamp
+
+### Enhanced Entries Table
+Add these new fields to track cryptographic verification:
+- Technician's digital signature of the entry
+- Supervisor's digital signature of the verification
+- Hash of all the verification data (to detect tampering)
+- Integrity signature (server-generated to prevent hash manipulation)
+- When verification was requested
+- Complete audit trail as JSON
+- IP address and browser info of supervisor
+- Which employee ID was used for this entry
+
+## User Experience Changes
+
+### Identity Creation Modal
+Create a user-friendly modal that explains:
+- "We're creating your personal digital signature"
+- "This makes your hour verification legally binding"
+- Form to collect identity information
+- Email verification step
+- Success confirmation
+
+### Employee ID Management
+Since people change jobs, let users:
+- View their current employee IDs in their profile
+- Add new employee ID when they change companies
+- Select which employee ID to use when logging hours
+- See in their history which company each hour was logged under
+
+### Enhanced Verification Display
+When viewing entries, show:
+- Whether entry is cryptographically signed
+- Verification certificate details
+- Complete audit trail
+- Any tamper detection warnings
+
+### Supervisor Verification Page
+When supervisor clicks verification link:
+- If new supervisor, guide through identity creation first
+- Show comprehensive details of what they're verifying
+- Clear "Digital Sign" button instead of just "Verify"
+- Confirmation page showing their signature was applied
+
+## Security Implementation
+
+### Key Management
+- Generate 2048-bit RSA key pairs
+- Encrypt private keys with server secret before storage
+- Never send private keys to browser
+- All signing happens server-side
+
+### Verification Hash System
+When requesting verification, create a hash that includes:
+- All entry data (date, location, method, hours)
+- Technician's identity information
+- Supervisor's email
+- Request timestamp
+This hash gets signed by both parties and stored permanently.
+
+### Tamper Detection
+- Before any verification, recalculate the hash and compare
+- If entry data changed after verification request, show warning
+- Validate both digital signatures are still valid
+- Check integrity signatures match
+
+### Audit Trail
+Store complete JSON audit trail including:
+- When verification was requested
+- Technician's signature details
+- Supervisor's signature details  
+- IP addresses and browser info
+- Any validation failures or tamper attempts
+
+## Email Integration
+
+### Enhanced Verification Emails
+Update verification emails to explain:
+- This is a legally binding digital signature request
+- Show cryptographic verification details
+- Include audit trail information
+- Mention digital certificate creation if supervisor is new
+
+### Email Verification
+For identity creation, send verification emails with codes that users must enter to confirm their email address before key generation.
+
+## PDF Export Enhancement
+
+When exporting verified hours to PDF, include:
+- Digital signature certificates for each entry
+- Verification hashes
+- Complete audit trail
+- Legal statement about cryptographic verification
+
+## Error Handling
+
+Handle these scenarios gracefully:
+- Key generation failures
+- Signature validation errors
+- Email verification timeouts
+- Tamper detection (show clear warnings)
+- Missing crypto identities (guide through creation)
+
+## Migration Strategy
+
+For existing users:
+- Don't break current functionality
+- On first verification attempt, guide through crypto identity creation
+- Existing verified hours remain as-is, new ones get crypto signatures
+- Clear messaging about the enhanced security
+
+## The End Result
+
+This creates a system where:
+1. Every technician has a verified cryptographic identity tied to their personal information
+2. Every supervisor has a verified cryptographic identity tied to their professional credentials  
+3. Hours verification creates legally binding digital signatures from both parties
+4. Complete audit trail proves exactly what was verified, when, and by whom
+5. Tampering is immediately detectable
+6. System works across devices since keys are stored server-side
+7. Users can change companies and add new employee IDs without losing their crypto identity
+
+This transforms the app from simple email verification to DocuSign-level legal defensibility while keeping it user-friendly for field technicians.
