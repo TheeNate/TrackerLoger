@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { pool } from "./db";
 
 const app = express();
 app.use(express.json());
@@ -36,7 +37,44 @@ app.use((req, res, next) => {
   next();
 });
 
+async function runMigrations() {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      ALTER TABLE entries
+        ADD COLUMN IF NOT EXISTS technician_signature TEXT,
+        ADD COLUMN IF NOT EXISTS supervisor_signature TEXT,
+        ADD COLUMN IF NOT EXISTS data_hash TEXT,
+        ADD COLUMN IF NOT EXISTS integrity_signature TEXT,
+        ADD COLUMN IF NOT EXISTS verification_requested_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS audit_trail JSON,
+        ADD COLUMN IF NOT EXISTS supervisor_ip_address TEXT,
+        ADD COLUMN IF NOT EXISTS supervisor_browser_info TEXT,
+        ADD COLUMN IF NOT EXISTS employee_id_used TEXT;
+    `);
+    await client.query(`
+      ALTER TABLE rope_hours
+        ADD COLUMN IF NOT EXISTS technician_signature TEXT,
+        ADD COLUMN IF NOT EXISTS supervisor_signature TEXT,
+        ADD COLUMN IF NOT EXISTS data_hash TEXT,
+        ADD COLUMN IF NOT EXISTS integrity_signature TEXT,
+        ADD COLUMN IF NOT EXISTS verification_requested_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS audit_trail JSON,
+        ADD COLUMN IF NOT EXISTS supervisor_ip_address TEXT,
+        ADD COLUMN IF NOT EXISTS supervisor_browser_info TEXT,
+        ADD COLUMN IF NOT EXISTS employee_id_used TEXT;
+    `);
+    log("Database migrations applied successfully");
+  } catch (err) {
+    log(`Migration error: ${err}`);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 (async () => {
+  await runMigrations();
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
