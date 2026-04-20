@@ -66,7 +66,7 @@ export function decryptPrivateKey(encryptedPrivateKey: string): string {
   
   const key = Buffer.from(crypto.hkdfSync('sha256', secret, salt, 'ojt-keywrap', 32));
   
-  const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
+  const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv, { authTagLength: 16 });
   decipher.setAuthTag(authTag);
   
   let decrypted = decipher.update(encrypted, 'hex', 'utf8');
