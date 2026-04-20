@@ -11,7 +11,7 @@ if (!process.env.RESEND_API_KEY) {
 }
 
 // Default sender email using verified domain
-const DEFAULT_FROM_EMAIL = 'noreply@ojt.n8ai.io';
+const DEFAULT_FROM_EMAIL = 'noreply@n8ai.io';
 
 // Custom domain — all verification/reset links use this
 const CUSTOM_DOMAIN = 'ojt.n8ai.io';
