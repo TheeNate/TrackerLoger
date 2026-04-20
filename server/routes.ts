@@ -19,6 +19,7 @@ import {
   sendEmail,
   sendVerificationConfirmation,
   sendVerificationRequest,
+  sendRopeHoursVerificationRequest,
 } from "./email";
 import {
   insertEntrySchema,
@@ -642,7 +643,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("-------------------------------------------------\n");
 
       // Send verification email using Resend with the updated rope hour
-      const emailSent = await sendVerificationRequest(supervisor, user!, updatedRopeHour);
+      const emailSent = await sendRopeHoursVerificationRequest(supervisor, user!, updatedRopeHour);
 
       if (!emailSent) {
         console.log(
