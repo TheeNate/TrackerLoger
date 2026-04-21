@@ -21,6 +21,7 @@ export interface IStorage {
   getEntries(userId: number): Promise<Entry[]>;
   getEntry(id: number): Promise<Entry | undefined>;
   getEntryByVerificationToken(token: string): Promise<Entry | undefined>;
+  getEntriesByBatchToken(token: string): Promise<Entry[]>;
   createEntry(entry: InsertEntry): Promise<Entry>;
   verifyEntry(id: number, verifiedBy: string): Promise<Entry>;
   
@@ -78,6 +79,13 @@ export class DatabaseStorage implements IStorage {
       .from(entries)
       .where(eq(entries.verificationToken, token));
     return entry;
+  }
+
+  async getEntriesByBatchToken(token: string): Promise<Entry[]> {
+    return await db
+      .select()
+      .from(entries)
+      .where(eq(entries.verificationToken, token));
   }
 
   async createEntry(entry: InsertEntry): Promise<Entry> {

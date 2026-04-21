@@ -1,17 +1,19 @@
 import { Entry } from "@shared/schema";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface EntryRowProps {
   entry: Entry;
   onVerifyRequest: (entry: Entry) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (id: number) => void;
 }
 
-export function EntryRow({ entry, onVerifyRequest }: EntryRowProps) {
+export function EntryRow({ entry, onVerifyRequest, isSelected, onToggleSelect }: EntryRowProps) {
   const formatDate = (date: Date | string) => {
     return new Date(date).toLocaleDateString();
   };
-  
-  // Create hour cells for each NDT method
+
   const createHourCell = (method: string) => {
     if (entry.method === method) {
       return (
@@ -22,9 +24,18 @@ export function EntryRow({ entry, onVerifyRequest }: EntryRowProps) {
     }
     return <td className="px-4 py-3 whitespace-nowrap text-sm text-neutral-900"></td>;
   };
-  
+
   return (
-    <tr className={entry.verified ? "bg-green-50" : ""}>
+    <tr className={entry.verified ? "bg-green-50" : isSelected ? "bg-blue-50" : ""}>
+      <td className="px-3 py-3 whitespace-nowrap">
+        {!entry.verified && onToggleSelect && (
+          <Checkbox
+            checked={isSelected ?? false}
+            onCheckedChange={() => onToggleSelect(entry.id)}
+            aria-label="Select entry"
+          />
+        )}
+      </td>
       <td className="px-4 py-3 whitespace-nowrap text-sm text-neutral-900">
         {formatDate(entry.date)}
       </td>
@@ -49,7 +60,7 @@ export function EntryRow({ entry, onVerifyRequest }: EntryRowProps) {
             <span className="text-green-700">Verified by {entry.verifiedBy}</span>
           </div>
         ) : (
-          <Button 
+          <Button
             onClick={() => onVerifyRequest(entry)}
             size="sm"
             variant="outline"

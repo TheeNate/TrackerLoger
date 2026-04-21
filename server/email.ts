@@ -154,6 +154,76 @@ export async function sendRopeHoursVerificationRequest(
   );
 }
 
+// Send a single batch verification request email covering multiple OJT entries
+export async function sendBatchVerificationRequest(
+  supervisor: Supervisor,
+  user: User,
+  batchEntries: Entry[],
+  batchToken: string
+): Promise<boolean> {
+  const verificationUrl = `${getBaseUrl()}/batch-verify/${batchToken}`;
+
+  console.log("\n-------------------------------------------------");
+  console.log("BATCH VERIFICATION LINK (For testing):");
+  console.log(verificationUrl);
+  console.log("-------------------------------------------------\n");
+
+  const formatMethod = (m: string) => (m === 'UT_THK' ? 'UT Thk.' : m);
+
+  const rows = batchEntries.map(e => `
+    <tr>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e5e5;">${new Date(e.date).toLocaleDateString()}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e5e5;">${e.location}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e5e5;">${formatMethod(e.method)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e5e5;">${e.hours.toFixed(1)}</td>
+    </tr>`).join('');
+
+  const totalHours = batchEntries.reduce((sum, e) => sum + e.hours, 0).toFixed(1);
+
+  const html = `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>OJT Hours Verification Request</h2>
+      <p>${user.name || user.email} ${user.employeeNumber ? `(Employee #: ${user.employeeNumber})` : ''} has requested your verification for the following ${batchEntries.length} OJT entries:</p>
+      
+      <table style="width:100%;border-collapse:collapse;margin:20px 0;background:#f4f4f4;border-radius:4px;">
+        <thead>
+          <tr style="background:#e0e0e0;">
+            <th style="padding:8px 10px;text-align:left;">Date</th>
+            <th style="padding:8px 10px;text-align:left;">Location</th>
+            <th style="padding:8px 10px;text-align:left;">Method</th>
+            <th style="padding:8px 10px;text-align:left;">Hours</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" style="padding:8px 10px;font-weight:bold;">Total</td>
+            <td style="padding:8px 10px;font-weight:bold;">${totalHours}</td>
+          </tr>
+        </tfoot>
+      </table>
+      
+      <p>Please click the button below to review and verify all of these entries at once:</p>
+      <p>
+        <a 
+          href="${verificationUrl}" 
+          style="display: inline-block; padding: 10px 20px; background-color: #42be65; color: white; text-decoration: none; border-radius: 4px;"
+        >
+          Verify All Hours
+        </a>
+      </p>
+      <p>Or copy and paste this URL into your browser:</p>
+      <p>${verificationUrl}</p>
+    </div>
+  `;
+
+  return await sendEmail(
+    supervisor.email,
+    `Batch Verification Request for OJT Hours from ${user.name || user.email}`,
+    html
+  );
+}
+
 // Send verification confirmation email to user (OJT entries)
 export async function sendVerificationConfirmation(
   user: User,

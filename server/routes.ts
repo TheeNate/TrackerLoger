@@ -20,6 +20,7 @@ import {
   sendVerificationConfirmation,
   sendVerificationRequest,
   sendRopeHoursVerificationRequest,
+  sendBatchVerificationRequest,
 } from "./email";
 import {
   insertEntrySchema,
@@ -859,6 +860,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Error verifying entry" });
+    }
+  });
+
+  // Batch verification request — one email, one link, multiple entries
+  app.post("/api/batch-verify-request", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const { entryIds, supervisorId } = req.body;
+
+      if (!Array.isArray(entryIds) || entryIds.length < 2) {
+        return res.status(400).json({ message: "At least 2 entry IDs are required for a batch request" });
+      }
+      if (!supervisorId) {
+        return res.status(400).json({ message: "Supervisor ID is required" });
+      }
+
+      const supervisor = await storage.getSupervisor(parseInt(supervisorId));
+      if (!supervisor || supervisor.userId !== userId) {
+        return res.status(404).json({ message: "Supervisor not found" });
+      }
+
+      // Validate every entry belongs to the user and is unverified
+      const resolvedEntries: any[] = [];
+      for (const id of entryIds) {
+        const entry = await storage.getEntry(parseInt(id));
+        if (!entry) return res.status(404).json({ message: `Entry ${id} not found` });
+        if (entry.userId !== userId) return res.status(403).json({ message: `Entry ${id} does not belong to you` });
+        if (entry.verified) return res.status(400).json({ message: `Entry ${id} is already verified` });
+        resolvedEntries.push(entry);
+      }
+
+      // Generate one shared batch token
+      const batchToken = randomUUID();
+
+      // Stamp every entry with the same token
+      await Promise.all(
+        resolvedEntries.map((entry) =>
+          db.update(entries).set({ verificationToken: batchToken }).where(eq(entries.id, entry.id))
+        )
+      );
+
+      const user = await storage.getUser(userId);
+      const baseUrl = getBaseUrl();
+      const verificationUrl = `${baseUrl}/batch-verify/${batchToken}`;
+
+      console.log("-------------------------------------------------");
+      console.log("BATCH VERIFICATION LINK (For testing):");
+      console.log(verificationUrl);
+      console.log("-------------------------------------------------\n");
+
+      await sendBatchVerificationRequest(supervisor, user!, resolvedEntries, batchToken);
+
+      return res.json({ message: "Batch verification request sent", verificationUrl, batchToken });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Error sending batch verification request" });
+    }
+  });
+
+  // GET — return all entries for a batch token (supervisor-facing)
+  app.get("/api/batch-verify/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const batchEntries = await storage.getEntriesByBatchToken(token);
+
+      if (!batchEntries.length) {
+        return res.status(404).json({ message: "Invalid batch verification token" });
+      }
+
+      const allVerified = batchEntries.every((e) => e.verified);
+      if (allVerified) {
+        return res.status(400).json({ message: "All entries in this batch are already verified" });
+      }
+
+      const user = await storage.getUser(batchEntries[0].userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      return res.json({ entries: batchEntries, user, type: "batch" });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Error fetching batch verification data" });
+    }
+  });
+
+  // POST — supervisor signs off on all entries in the batch
+  app.post("/api/batch-verify/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { supervisorName } = req.body;
+
+      if (!supervisorName) {
+        return res.status(400).json({ message: "Supervisor name is required" });
+      }
+
+      const batchEntries = await storage.getEntriesByBatchToken(token);
+      if (!batchEntries.length) {
+        return res.status(404).json({ message: "Invalid batch verification token" });
+      }
+
+      const unverified = batchEntries.filter((e) => !e.verified);
+      if (!unverified.length) {
+        return res.status(400).json({ message: "All entries in this batch are already verified" });
+      }
+
+      const verifiedEntries = await Promise.all(
+        unverified.map((entry) => storage.verifyEntry(entry.id, supervisorName))
+      );
+
+      // Send one confirmation email to the technician
+      const user = await storage.getUser(batchEntries[0].userId);
+      if (user) {
+        for (const entry of verifiedEntries) {
+          await sendVerificationConfirmation(user, entry, supervisorName);
+        }
+      }
+
+      return res.json({ message: "All entries verified successfully", entries: verifiedEntries });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Error verifying batch entries" });
     }
   });
 
