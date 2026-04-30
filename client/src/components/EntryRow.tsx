@@ -1,15 +1,17 @@
 import { Entry } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Pencil } from "lucide-react";
 
 interface EntryRowProps {
   entry: Entry;
   onVerifyRequest: (entry: Entry) => void;
   isSelected?: boolean;
   onToggleSelect?: (id: number) => void;
+  onEdit?: (entry: Entry) => void;
 }
 
-export function EntryRow({ entry, onVerifyRequest, isSelected, onToggleSelect }: EntryRowProps) {
+export function EntryRow({ entry, onVerifyRequest, isSelected, onToggleSelect, onEdit }: EntryRowProps) {
   const formatDate = (date: Date | string) => {
     return new Date(date).toLocaleDateString();
   };
@@ -60,14 +62,28 @@ export function EntryRow({ entry, onVerifyRequest, isSelected, onToggleSelect }:
             <span className="text-green-700">Verified by {entry.verifiedBy}</span>
           </div>
         ) : (
-          <Button
-            onClick={() => onVerifyRequest(entry)}
-            size="sm"
-            variant="outline"
-            className="text-xs"
-          >
-            Request Verification
-          </Button>
+          <div className="flex items-center gap-2">
+            {onEdit && !entry.verificationRequestedAt && (
+              <Button
+                onClick={() => onEdit(entry)}
+                size="sm"
+                variant="ghost"
+                className="text-xs px-2"
+                aria-label="Edit entry"
+                title="Edit entry"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            <Button
+              onClick={() => onVerifyRequest(entry)}
+              size="sm"
+              variant="outline"
+              className="text-xs"
+            >
+              Request Verification
+            </Button>
+          </div>
         )}
       </td>
     </tr>

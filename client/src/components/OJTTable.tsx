@@ -11,6 +11,7 @@ interface OJTTableProps {
   selectedEntryIds: Set<number>;
   onToggleSelect: (id: number) => void;
   onBatchVerifyRequest: () => void;
+  onEditEntry?: (entry: Entry) => void;
 }
 
 export function OJTTable({
@@ -19,6 +20,7 @@ export function OJTTable({
   selectedEntryIds,
   onToggleSelect,
   onBatchVerifyRequest,
+  onEditEntry,
 }: OJTTableProps) {
   const totals = useMemo(() => {
     const initialTotals: Record<string, number> = {
@@ -94,6 +96,7 @@ export function OJTTable({
                 onVerifyRequest={onVerifyRequest}
                 isSelected={selectedEntryIds.has(entry.id)}
                 onToggleSelect={onToggleSelect}
+                onEdit={onEditEntry}
               />
             ))}
           </tbody>

@@ -502,6 +502,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/entries/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const id = parseInt(req.params.id);
+
+      const existing = await storage.getEntry(id);
+      if (!existing) return res.status(404).json({ message: "Entry not found" });
+      if (existing.userId !== userId) {
+        return res.status(403).json({ message: "Unauthorized: Entry does not belong to you" });
+      }
+      if (existing.verified) {
+        return res.status(400).json({ message: "Cannot edit a verified entry" });
+      }
+      if (existing.verificationRequestedAt) {
+        return res.status(400).json({
+          message: "Cannot edit an entry that has been sent for verification",
+        });
+      }
+
+      const updateSchema = insertEntrySchema.omit({ userId: true }).partial();
+      const body = { ...req.body };
+      if (body.date) body.date = new Date(body.date);
+      const parsedData = updateSchema.parse(body);
+
+      const updated = await storage.updateEntry(id, parsedData);
+      res.json(updated);
+    } catch (error) {
+      console.error(error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid entry data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Error updating entry" });
+    }
+  });
+
   // Supervisor routes
   app.get("/api/supervisors", requireAuth, async (req, res) => {
     try {
@@ -613,6 +648,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       res.status(500).json({ message: "Error creating rope hour" });
+    }
+  });
+
+  app.patch("/api/rope-hours/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const id = parseInt(req.params.id);
+
+      const existing = await storage.getRopeHour(id);
+      if (!existing) return res.status(404).json({ message: "Rope hour entry not found" });
+      if (existing.userId !== userId) {
+        return res.status(403).json({ message: "Unauthorized: Entry does not belong to you" });
+      }
+      if (existing.verified) {
+        return res.status(400).json({ message: "Cannot edit a verified entry" });
+      }
+      if (existing.verificationRequestedAt) {
+        return res.status(400).json({
+          message: "Cannot edit an entry that has been sent for verification",
+        });
+      }
+
+      const updateSchema = insertRopeHoursSchema.omit({ userId: true }).partial();
+      const body = { ...req.body };
+      if (body.startDate) body.startDate = new Date(body.startDate);
+      if (body.endDate) body.endDate = new Date(body.endDate);
+      const parsedData = updateSchema.parse(body);
+
+      const updated = await storage.updateRopeHour(id, parsedData);
+      res.json(updated);
+    } catch (error) {
+      console.error(error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid rope hour data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Error updating rope hour" });
     }
   });
 

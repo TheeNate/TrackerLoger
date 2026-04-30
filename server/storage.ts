@@ -23,6 +23,7 @@ export interface IStorage {
   getEntryByVerificationToken(token: string): Promise<Entry | undefined>;
   getEntriesByBatchToken(token: string): Promise<Entry[]>;
   createEntry(entry: InsertEntry): Promise<Entry>;
+  updateEntry(id: number, updates: Partial<InsertEntry>): Promise<Entry>;
   verifyEntry(id: number, verifiedBy: string): Promise<Entry>;
   
   // Rope Hours methods
@@ -30,6 +31,7 @@ export interface IStorage {
   getRopeHour(id: number): Promise<RopeHours | undefined>;
   getRopeHourByVerificationToken(token: string): Promise<RopeHours | undefined>;
   createRopeHour(ropeHour: InsertRopeHours): Promise<RopeHours>;
+  updateRopeHour(id: number, updates: Partial<InsertRopeHours>): Promise<RopeHours>;
   verifyRopeHour(id: number, verifiedBy: string): Promise<RopeHours>;
   
   // Supervisor methods
@@ -99,6 +101,15 @@ export class DatabaseStorage implements IStorage {
     return newEntry;
   }
 
+  async updateEntry(id: number, updates: Partial<InsertEntry>): Promise<Entry> {
+    const [updated] = await db
+      .update(entries)
+      .set(updates)
+      .where(eq(entries.id, id))
+      .returning();
+    return updated;
+  }
+
   async verifyEntry(id: number, verifiedBy: string): Promise<Entry> {
     const [entry] = await db
       .update(entries)
@@ -141,6 +152,15 @@ export class DatabaseStorage implements IStorage {
       .values({ ...ropeHour, verificationToken })
       .returning();
     return newRopeHour;
+  }
+
+  async updateRopeHour(id: number, updates: Partial<InsertRopeHours>): Promise<RopeHours> {
+    const [updated] = await db
+      .update(ropeHours)
+      .set(updates)
+      .where(eq(ropeHours.id, id))
+      .returning();
+    return updated;
   }
 
   async verifyRopeHour(id: number, verifiedBy: string): Promise<RopeHours> {

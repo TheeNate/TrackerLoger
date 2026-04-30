@@ -7,12 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
-import { Calendar, Clock, MapPin, Cable, User } from "lucide-react";
+import { Calendar, Clock, MapPin, Cable, User, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import { RopeHours } from "@shared/schema";
 import { ProfileHeader } from "@/components/ProfileHeader";
+import { EditRopeHourDialog } from "@/components/EditRopeHourDialog";
 
 export default function RopeHoursPage() {
   const [startDate, setStartDate] = useState("");
@@ -21,6 +22,7 @@ export default function RopeHoursPage() {
   const [skills, setSkills] = useState("");
   const [hours, setHours] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingRopeHour, setEditingRopeHour] = useState<RopeHours | null>(null);
   const { toast } = useToast();
 
   // Query user data
@@ -300,10 +302,22 @@ export default function RopeHoursPage() {
                           Verified
                         </span>
                       ) : (
-                        <div className="space-x-2">
+                        <div className="flex items-center gap-2">
                           <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-sm">
                             Pending
                           </span>
+                          {!entry.verificationRequestedAt && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingRopeHour(entry)}
+                              aria-label="Edit entry"
+                              title="Edit entry"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
                           {supervisors.length > 0 && (
                             <Select
                               onValueChange={(value) => handleVerifyRequest(entry.id, parseInt(value))}
@@ -331,6 +345,12 @@ export default function RopeHoursPage() {
         </CardContent>
       </Card>
       </main>
+
+      <EditRopeHourDialog
+        ropeHour={editingRopeHour}
+        open={!!editingRopeHour}
+        onClose={() => setEditingRopeHour(null)}
+      />
     </div>
   );
 }

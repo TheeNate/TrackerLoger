@@ -7,6 +7,7 @@ import { NewEntryForm } from "@/components/NewEntryForm";
 import { OJTTable } from "@/components/OJTTable";
 import { SupervisorVerifyModal } from "@/components/SupervisorVerifyModal";
 import { EmailSentModal } from "@/components/EmailSentModal";
+import { EditEntryDialog } from "@/components/EditEntryDialog";
 import { Entry, User } from "@shared/schema";
 
 export default function ProfilePage() {
@@ -16,6 +17,7 @@ export default function ProfilePage() {
   const [isEmailSentModalOpen, setIsEmailSentModalOpen] = useState(false);
   const [selectedEntryIds, setSelectedEntryIds] = useState<Set<number>>(new Set());
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
 
   const { data: user, isLoading: isLoadingUser } = useQuery<User>({
     queryKey: ["/api/user"]
@@ -83,6 +85,7 @@ export default function ProfilePage() {
           selectedEntryIds={selectedEntryIds}
           onToggleSelect={handleToggleSelect}
           onBatchVerifyRequest={() => setIsBatchModalOpen(true)}
+          onEditEntry={setEditingEntry}
         />
 
         <div className="bg-white rounded-lg shadow-sm p-6">
@@ -121,6 +124,12 @@ export default function ProfilePage() {
       <EmailSentModal
         isOpen={isEmailSentModalOpen}
         onClose={() => setIsEmailSentModalOpen(false)}
+      />
+
+      <EditEntryDialog
+        entry={editingEntry}
+        open={!!editingEntry}
+        onClose={() => setEditingEntry(null)}
       />
     </div>
   );
