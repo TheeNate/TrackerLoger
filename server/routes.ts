@@ -536,6 +536,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/supervisors/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const id = parseInt(req.params.id);
+
+      const existing = await storage.getSupervisor(id);
+      if (!existing) return res.status(404).json({ message: "Signer not found" });
+      if (existing.userId !== userId) return res.status(403).json({ message: "Unauthorized" });
+
+      const updateSchema = insertSupervisorSchema.omit({ userId: true }).partial();
+      const parsedData = updateSchema.parse(req.body);
+
+      const updated = await storage.updateSupervisor(id, parsedData);
+      res.json(updated);
+    } catch (error) {
+      console.error(error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid signer data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Error updating signer" });
+    }
+  });
+
+  app.delete("/api/supervisors/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const id = parseInt(req.params.id);
+
+      const existing = await storage.getSupervisor(id);
+      if (!existing) return res.status(404).json({ message: "Signer not found" });
+      if (existing.userId !== userId) return res.status(403).json({ message: "Unauthorized" });
+
+      await storage.deleteSupervisor(id);
+      res.json({ message: "Signer deleted" });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Error deleting signer" });
+    }
+  });
+
   // Rope Hours routes
   app.get("/api/rope-hours", requireAuth, async (req, res) => {
     try {

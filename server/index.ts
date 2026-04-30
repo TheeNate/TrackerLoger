@@ -64,6 +64,14 @@ async function runMigrations() {
         ADD COLUMN IF NOT EXISTS supervisor_browser_info TEXT,
         ADD COLUMN IF NOT EXISTS employee_id_used TEXT;
     `);
+    await client.query(`
+      ALTER TABLE supervisors
+        ADD COLUMN IF NOT EXISTS sprat_number TEXT,
+        ADD COLUMN IF NOT EXISTS irata_number TEXT,
+        ADD COLUMN IF NOT EXISTS ndt_method TEXT,
+        ALTER COLUMN certification_level DROP NOT NULL,
+        ALTER COLUMN company DROP NOT NULL;
+    `);
     log("Database migrations applied successfully");
   } catch (err) {
     log(`Migration error: ${err}`);

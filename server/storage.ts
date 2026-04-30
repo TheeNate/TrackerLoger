@@ -36,6 +36,8 @@ export interface IStorage {
   getSupervisors(userId: number): Promise<Supervisor[]>;
   getSupervisor(id: number): Promise<Supervisor | undefined>;
   createSupervisor(supervisor: InsertSupervisor): Promise<Supervisor>;
+  updateSupervisor(id: number, updates: Partial<InsertSupervisor>): Promise<Supervisor>;
+  deleteSupervisor(id: number): Promise<void>;
   
   // Crypto Identity methods
   getUserCryptoIdentity(userId: number): Promise<UserCryptoIdentity | undefined>;
@@ -176,6 +178,19 @@ export class DatabaseStorage implements IStorage {
       .values(supervisor)
       .returning();
     return newSupervisor;
+  }
+
+  async updateSupervisor(id: number, updates: Partial<InsertSupervisor>): Promise<Supervisor> {
+    const [updated] = await db
+      .update(supervisors)
+      .set(updates)
+      .where(eq(supervisors.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteSupervisor(id: number): Promise<void> {
+    await db.delete(supervisors).where(eq(supervisors.id, id));
   }
 
   // Crypto Identity methods

@@ -8,6 +8,7 @@ import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/AuthPage";
 import ProfilePage from "@/pages/ProfilePage";
 import RopeHoursPage from "@/pages/RopeHoursPage";
+import SignersPage from "@/pages/SignersPage";
 import VerifyPage from "@/pages/VerifyPage";
 import BatchVerifyPage from "@/pages/BatchVerifyPage";
 import SuccessPage from "@/pages/SuccessPage";
@@ -30,6 +31,11 @@ function Router() {
       <Route path="/rope-hours">
         <ProtectedRoute>
           <RopeHoursPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/signers">
+        <ProtectedRoute>
+          <SignersPage />
         </ProtectedRoute>
       </Route>
       <Route path="/admin">

@@ -56,15 +56,18 @@ export const insertEntrySchema = createInsertSchema(entries).pick({
   hours: true,
 });
 
-// Supervisor model
+// Supervisor / Signer model
 export const supervisors = pgTable("supervisors", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id),
   name: text("name").notNull(),
   email: text("email").notNull(),
   phone: text("phone").notNull(),
-  certificationLevel: text("certification_level").notNull(),
-  company: text("company").notNull(),
+  certificationLevel: text("certification_level"),
+  company: text("company"),
+  spratNumber: text("sprat_number"),
+  irataNumber: text("irata_number"),
+  ndtMethod: text("ndt_method"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -75,6 +78,9 @@ export const insertSupervisorSchema = createInsertSchema(supervisors).pick({
   phone: true,
   certificationLevel: true,
   company: true,
+  spratNumber: true,
+  irataNumber: true,
+  ndtMethod: true,
 });
 
 // Rope Hours model

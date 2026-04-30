@@ -12,6 +12,7 @@ import { Entry, Supervisor } from "@shared/schema";
 import { supervisorFormSchema, type SupervisorFormValues } from "@/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Check, Copy } from "lucide-react";
+import { SignerFormFields } from "@/components/SignerFormFields";
 
 interface SupervisorVerifyModalProps {
   isOpen: boolean;
@@ -36,8 +37,11 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
       name: "",
       email: "",
       phone: "",
-      certificationLevel: "Level I",
+      certificationLevel: "",
       company: "",
+      spratNumber: "",
+      irataNumber: "",
+      ndtMethod: "",
     },
   });
 
@@ -72,8 +76,11 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
         form.setValue("name", supervisor.name);
         form.setValue("email", supervisor.email);
         form.setValue("phone", supervisor.phone);
-        form.setValue("certificationLevel", supervisor.certificationLevel as any);
-        form.setValue("company", supervisor.company);
+        form.setValue("certificationLevel", supervisor.certificationLevel ?? "");
+        form.setValue("company", supervisor.company ?? "");
+        form.setValue("spratNumber", supervisor.spratNumber ?? "");
+        form.setValue("irataNumber", supervisor.irataNumber ?? "");
+        form.setValue("ndtMethod", supervisor.ndtMethod ?? "");
       }
     }
   };
@@ -90,7 +97,15 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
       if (selectedSupervisor && selectedSupervisor !== "new") {
         supervisorId = parseInt(selectedSupervisor);
       } else {
-        const supervisorResponse = await apiRequest("POST", "/api/supervisors", values);
+        const payload = {
+          ...values,
+          spratNumber: values.spratNumber || null,
+          irataNumber: values.irataNumber || null,
+          ndtMethod: values.ndtMethod || null,
+          certificationLevel: values.certificationLevel || null,
+          company: values.company || null,
+        };
+        const supervisorResponse = await apiRequest("POST", "/api/supervisors", payload);
         if (!supervisorResponse.ok) throw new Error("Failed to create supervisor");
         const newSupervisor = await supervisorResponse.json();
         supervisorId = newSupervisor.id;
@@ -262,74 +277,7 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
                 </Select>
               </div>
 
-              <div className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Supervisor Name</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Supervisor Email</FormLabel>
-                      <FormControl><Input type="email" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Supervisor Phone</FormLabel>
-                      <FormControl><Input type="tel" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="certificationLevel"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Certification Level</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select certification level" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Level I">Level I</SelectItem>
-                          <SelectItem value="Level II">Level II</SelectItem>
-                          <SelectItem value="Level III">Level III</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="company"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Company</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              <SignerFormFields form={form} />
 
               <DialogFooter className="mt-6">
                 <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>

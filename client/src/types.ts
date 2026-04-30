@@ -21,13 +21,16 @@ export const entryFormSchema = z.object({
 
 export type EntryFormValues = z.infer<typeof entryFormSchema>;
 
-// Supervisor form validation schema
+// Signer / Supervisor form validation schema
 export const supervisorFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email address"),
-  phone: z.string().min(1, "Phone is required"),
-  certificationLevel: z.enum(["Level I", "Level II", "Level III"]),
-  company: z.string().min(1, "Company is required"),
+  phone: z.string().min(1, "Phone number is required"),
+  spratNumber: z.string().optional(),
+  irataNumber: z.string().optional(),
+  ndtMethod: z.string().optional(),
+  certificationLevel: z.string().optional(),
+  company: z.string().optional(),
 });
 
 export type SupervisorFormValues = z.infer<typeof supervisorFormSchema>;
