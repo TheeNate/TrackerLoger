@@ -1405,46 +1405,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (body.type === "ojt") {
-        const created = [];
-        for (const raw of body.rows) {
-          const row = ojtCommitRowSchema.parse(raw);
-          const entry = await storage.createImportedEntry(
-            {
-              userId,
-              date: row.date,
-              location: row.location,
-              method: row.method,
-              hours: row.hours,
-            },
-            body.sourceDocumentKey,
-            body.sourceDocumentName,
-          );
-          created.push(entry);
-        }
+        // Validate every row up front so a bad row aborts the whole import
+        // before any DB writes happen.
+        const validated = body.rows.map((raw) => ojtCommitRowSchema.parse(raw));
+        const toInsert = validated.map((row) => ({
+          userId,
+          date: row.date,
+          location: row.location,
+          method: row.method,
+          hours: row.hours,
+        }));
+        const created = await storage.bulkCreateImportedEntries(
+          toInsert,
+          body.sourceDocumentKey,
+          body.sourceDocumentName,
+        );
         return res.status(201).json({ created });
       } else {
-        const created = [];
-        for (const raw of body.rows) {
-          const row = ropeCommitRowSchema.parse(raw);
+        const validated = body.rows.map((raw) => ropeCommitRowSchema.parse(raw));
+        for (const row of validated) {
           if (row.endDate < row.startDate) {
             return res.status(400).json({
               message: "End date must be on or after start date",
             });
           }
-          const ropeHour = await storage.createImportedRopeHour(
-            {
-              userId,
-              startDate: row.startDate,
-              endDate: row.endDate,
-              location: row.location,
-              skills: row.skills,
-              hours: row.hours,
-            },
-            body.sourceDocumentKey,
-            body.sourceDocumentName,
-          );
-          created.push(ropeHour);
         }
+        const toInsert = validated.map((row) => ({
+          userId,
+          startDate: row.startDate,
+          endDate: row.endDate,
+          location: row.location,
+          skills: row.skills,
+          hours: row.hours,
+        }));
+        const created = await storage.bulkCreateImportedRopeHours(
+          toInsert,
+          body.sourceDocumentKey,
+          body.sourceDocumentName,
+        );
         return res.status(201).json({ created });
       }
     } catch (error) {
@@ -1481,6 +1479,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let sourceName: string | null = null;
       let allowed = false;
 
+      let recordOwnerId: number | null = null;
+
       if (recordType === "entry") {
         const entry = await storage.getEntry(recordId);
         if (!entry || !entry.sourceDocumentKey) {
@@ -1490,6 +1490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         sourceKey = entry.sourceDocumentKey;
         sourceName = entry.sourceDocumentName;
+        recordOwnerId = entry.userId;
         if (sessionUserId && entry.userId === sessionUserId) {
           allowed = true;
         } else if (token && entry.verificationToken === token) {
@@ -1504,10 +1505,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         sourceKey = ropeHour.sourceDocumentKey;
         sourceName = ropeHour.sourceDocumentName;
+        recordOwnerId = ropeHour.userId;
         if (sessionUserId && ropeHour.userId === sessionUserId) {
           allowed = true;
         } else if (token && ropeHour.verificationToken === token) {
           allowed = true;
+        }
+      }
+
+      // Sibling-token access: a supervisor verifying a batch should be able
+      // to view any imported source document referenced by another record in
+      // the same batch (same verification token, same owning user).
+      if (!allowed && token && sourceKey && recordOwnerId !== null) {
+        const tokenEntry =
+          await storage.getEntryByVerificationToken(token);
+        if (
+          tokenEntry &&
+          tokenEntry.userId === recordOwnerId &&
+          tokenEntry.sourceDocumentKey === sourceKey
+        ) {
+          allowed = true;
+        }
+        if (!allowed) {
+          const tokenRope =
+            await storage.getRopeHourByVerificationToken(token);
+          if (
+            tokenRope &&
+            tokenRope.userId === recordOwnerId &&
+            tokenRope.sourceDocumentKey === sourceKey
+          ) {
+            allowed = true;
+          }
         }
       }
 

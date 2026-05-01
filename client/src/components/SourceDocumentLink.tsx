@@ -36,15 +36,23 @@ export function SourceDocumentLink({
         credentials: "include",
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Could not open the signed log");
+        const body = (await res
+          .json()
+          .catch(() => ({}))) as { message?: unknown };
+        const message =
+          typeof body.message === "string"
+            ? body.message
+            : "Could not open the signed log";
+        throw new Error(message);
       }
       const data: { url: string; name: string | null } = await res.json();
       window.open(data.url, "_blank", "noopener,noreferrer");
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const description =
+        err instanceof Error ? err.message : "Please try again";
       toast({
         title: "Could not open log",
-        description: err?.message || "Please try again",
+        description,
         variant: "destructive",
       });
     } finally {

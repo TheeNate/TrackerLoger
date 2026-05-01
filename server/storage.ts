@@ -28,6 +28,11 @@ export interface IStorage {
     sourceDocumentKey: string,
     sourceDocumentName: string,
   ): Promise<Entry>;
+  bulkCreateImportedEntries(
+    entries: InsertEntry[],
+    sourceDocumentKey: string,
+    sourceDocumentName: string,
+  ): Promise<Entry[]>;
   updateEntry(id: number, updates: Partial<InsertEntry>): Promise<Entry>;
   verifyEntry(id: number, verifiedBy: string): Promise<Entry>;
   
@@ -41,6 +46,11 @@ export interface IStorage {
     sourceDocumentKey: string,
     sourceDocumentName: string,
   ): Promise<RopeHours>;
+  bulkCreateImportedRopeHours(
+    ropeHours: InsertRopeHours[],
+    sourceDocumentKey: string,
+    sourceDocumentName: string,
+  ): Promise<RopeHours[]>;
   updateRopeHour(id: number, updates: Partial<InsertRopeHours>): Promise<RopeHours>;
   verifyRopeHour(id: number, verifiedBy: string): Promise<RopeHours>;
   
@@ -116,20 +126,38 @@ export class DatabaseStorage implements IStorage {
     sourceDocumentKey: string,
     sourceDocumentName: string,
   ): Promise<Entry> {
+    const [created] = await this.bulkCreateImportedEntries(
+      [entry],
+      sourceDocumentKey,
+      sourceDocumentName,
+    );
+    return created;
+  }
+
+  async bulkCreateImportedEntries(
+    items: InsertEntry[],
+    sourceDocumentKey: string,
+    sourceDocumentName: string,
+  ): Promise<Entry[]> {
+    if (items.length === 0) return [];
     const now = new Date();
-    const [newEntry] = await db
-      .insert(entries)
-      .values({
-        ...entry,
-        verified: true,
-        verifiedBy: "Imported from signed log",
-        verifiedAt: now,
-        importedAt: now,
-        sourceDocumentKey,
-        sourceDocumentName,
-      })
-      .returning();
-    return newEntry;
+    return await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(entries)
+        .values(
+          items.map((entry) => ({
+            ...entry,
+            verified: true,
+            verifiedBy: "Imported from signed log",
+            verifiedAt: now,
+            importedAt: now,
+            sourceDocumentKey,
+            sourceDocumentName,
+          })),
+        )
+        .returning();
+      return inserted;
+    });
   }
 
   async updateEntry(id: number, updates: Partial<InsertEntry>): Promise<Entry> {
@@ -190,20 +218,38 @@ export class DatabaseStorage implements IStorage {
     sourceDocumentKey: string,
     sourceDocumentName: string,
   ): Promise<RopeHours> {
+    const [created] = await this.bulkCreateImportedRopeHours(
+      [ropeHour],
+      sourceDocumentKey,
+      sourceDocumentName,
+    );
+    return created;
+  }
+
+  async bulkCreateImportedRopeHours(
+    items: InsertRopeHours[],
+    sourceDocumentKey: string,
+    sourceDocumentName: string,
+  ): Promise<RopeHours[]> {
+    if (items.length === 0) return [];
     const now = new Date();
-    const [newRopeHour] = await db
-      .insert(ropeHours)
-      .values({
-        ...ropeHour,
-        verified: true,
-        verifiedBy: "Imported from signed log",
-        verifiedAt: now,
-        importedAt: now,
-        sourceDocumentKey,
-        sourceDocumentName,
-      })
-      .returning();
-    return newRopeHour;
+    return await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(ropeHours)
+        .values(
+          items.map((ropeHour) => ({
+            ...ropeHour,
+            verified: true,
+            verifiedBy: "Imported from signed log",
+            verifiedAt: now,
+            importedAt: now,
+            sourceDocumentKey,
+            sourceDocumentName,
+          })),
+        )
+        .returning();
+      return inserted;
+    });
   }
 
   async updateRopeHour(id: number, updates: Partial<InsertRopeHours>): Promise<RopeHours> {

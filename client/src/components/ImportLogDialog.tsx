@@ -41,11 +41,64 @@ interface RopeRow {
   hours: string;
 }
 
+interface ExtractedOJTRow {
+  date?: unknown;
+  location?: unknown;
+  method?: unknown;
+  hours?: unknown;
+}
+
+interface ExtractedRopeRow {
+  startDate?: unknown;
+  endDate?: unknown;
+  location?: unknown;
+  skills?: unknown;
+  hours?: unknown;
+}
+
 interface ExtractResponse {
   sourceDocumentKey: string;
   sourceDocumentName: string;
-  rows: any[];
+  rows: Array<ExtractedOJTRow | ExtractedRopeRow>;
   extractionError: string | null;
+}
+
+interface CommittedOJTRow {
+  date: string;
+  location: string;
+  method: string;
+  hours: number;
+}
+
+interface CommittedRopeRow {
+  startDate: string;
+  endDate: string;
+  location: string;
+  skills: string;
+  hours: number;
+}
+
+type CommittedRow = CommittedOJTRow | CommittedRopeRow;
+
+function getMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  return fallback;
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function asNumberString(value: unknown): string {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value.toString();
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = parseFloat(value);
+    if (Number.isFinite(parsed)) return parsed.toString();
+  }
+  return "";
 }
 
 interface ImportLogDialogProps {
@@ -122,42 +175,51 @@ export function ImportLogDialog({ open, onClose, type }: ImportLogDialogProps) {
         credentials: "include",
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Failed to process the document");
+        const body = (await res
+          .json()
+          .catch(() => ({}))) as { message?: unknown };
+        const message =
+          typeof body.message === "string"
+            ? body.message
+            : "Failed to process the document";
+        throw new Error(message);
       }
       const data: ExtractResponse = await res.json();
       setSourceDocumentKey(data.sourceDocumentKey);
       setSourceDocumentName(data.sourceDocumentName);
       setExtractionError(data.extractionError);
 
+      const incoming = Array.isArray(data.rows) ? data.rows : [];
       if (type === "ojt") {
-        const rows: OJTRow[] = (data.rows || []).map((r: any) => ({
-          date:
-            typeof r.date === "string" ? r.date.slice(0, 10) : "",
-          location: r.location ?? "",
-          method: METHOD_OPTIONS.includes(r.method) ? r.method : "ET",
-          hours:
-            typeof r.hours === "number" ? r.hours.toString() : "",
-        }));
+        const rows: OJTRow[] = incoming.map((raw) => {
+          const r = raw as ExtractedOJTRow;
+          const method = asString(r.method);
+          return {
+            date: asString(r.date).slice(0, 10),
+            location: asString(r.location),
+            method: METHOD_OPTIONS.includes(method) ? method : "ET",
+            hours: asNumberString(r.hours),
+          };
+        });
         setOJTRows(rows.length > 0 ? rows : [emptyOJTRow()]);
       } else {
-        const rows: RopeRow[] = (data.rows || []).map((r: any) => ({
-          startDate:
-            typeof r.startDate === "string" ? r.startDate.slice(0, 10) : "",
-          endDate:
-            typeof r.endDate === "string" ? r.endDate.slice(0, 10) : "",
-          location: r.location ?? "",
-          skills: r.skills ?? "",
-          hours:
-            typeof r.hours === "number" ? r.hours.toString() : "",
-        }));
+        const rows: RopeRow[] = incoming.map((raw) => {
+          const r = raw as ExtractedRopeRow;
+          return {
+            startDate: asString(r.startDate).slice(0, 10),
+            endDate: asString(r.endDate).slice(0, 10),
+            location: asString(r.location),
+            skills: asString(r.skills),
+            hours: asNumberString(r.hours),
+          };
+        });
         setRopeRows(rows.length > 0 ? rows : [emptyRopeRow()]);
       }
       setStage("review");
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: "Upload failed",
-        description: err?.message || "Could not process the document",
+        description: getMessage(err, "Could not process the document"),
         variant: "destructive",
       });
     } finally {
@@ -187,13 +249,13 @@ export function ImportLogDialog({ open, onClose, type }: ImportLogDialogProps) {
   };
 
   const validateAndBuildPayload = ():
-    | { ok: true; rows: any[] }
+    | { ok: true; rows: CommittedRow[] }
     | { ok: false; error: string } => {
     if (type === "ojt") {
       if (ojtRows.length === 0) {
         return { ok: false, error: "Add at least one entry to import" };
       }
-      const built: any[] = [];
+      const built: CommittedOJTRow[] = [];
       for (let i = 0; i < ojtRows.length; i++) {
         const r = ojtRows[i];
         if (!r.date) return { ok: false, error: `Row ${i + 1}: date required` };
@@ -219,7 +281,7 @@ export function ImportLogDialog({ open, onClose, type }: ImportLogDialogProps) {
       if (ropeRows.length === 0) {
         return { ok: false, error: "Add at least one entry to import" };
       }
-      const built: any[] = [];
+      const built: CommittedRopeRow[] = [];
       for (let i = 0; i < ropeRows.length; i++) {
         const r = ropeRows[i];
         if (!r.startDate)
@@ -278,13 +340,22 @@ export function ImportLogDialog({ open, onClose, type }: ImportLogDialogProps) {
         }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Failed to import entries");
+        const body = (await res
+          .json()
+          .catch(() => ({}))) as { message?: unknown };
+        const message =
+          typeof body.message === "string"
+            ? body.message
+            : "Failed to import entries";
+        throw new Error(message);
       }
-      const result = await res.json();
+      const result = (await res.json()) as { created?: unknown[] };
+      const createdCount = Array.isArray(result.created)
+        ? result.created.length
+        : payload.rows.length;
       toast({
         title: "Imported",
-        description: `${result.created?.length ?? payload.rows.length} ${
+        description: `${createdCount} ${
           type === "ojt" ? "OJT entries" : "rope hour entries"
         } imported from your signed log.`,
       });
@@ -293,10 +364,10 @@ export function ImportLogDialog({ open, onClose, type }: ImportLogDialogProps) {
       });
       reset();
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: "Import failed",
-        description: err?.message || "Could not import entries",
+        description: getMessage(err, "Could not import entries"),
         variant: "destructive",
       });
     } finally {
