@@ -8,6 +8,9 @@ import { OJTTable } from "@/components/OJTTable";
 import { SupervisorVerifyModal } from "@/components/SupervisorVerifyModal";
 import { EmailSentModal } from "@/components/EmailSentModal";
 import { EditEntryDialog } from "@/components/EditEntryDialog";
+import { ImportLogDialog } from "@/components/ImportLogDialog";
+import { Button } from "@/components/ui/button";
+import { Upload } from "lucide-react";
 import { Entry, User } from "@shared/schema";
 
 export default function ProfilePage() {
@@ -18,6 +21,7 @@ export default function ProfilePage() {
   const [selectedEntryIds, setSelectedEntryIds] = useState<Set<number>>(new Set());
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
 
   const { data: user, isLoading: isLoadingUser } = useQuery<User>({
     queryKey: ["/api/user"]
@@ -77,6 +81,17 @@ export default function ProfilePage() {
       <ProfileHeader user={user} verifiedEntries={verifiedEntries} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-end mb-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsImportDialogOpen(true)}
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Import from signed log
+          </Button>
+        </div>
+
         <NewEntryForm />
 
         <OJTTable
@@ -130,6 +145,12 @@ export default function ProfilePage() {
         entry={editingEntry}
         open={!!editingEntry}
         onClose={() => setEditingEntry(null)}
+      />
+
+      <ImportLogDialog
+        open={isImportDialogOpen}
+        onClose={() => setIsImportDialogOpen(false)}
+        type="ojt"
       />
     </div>
   );

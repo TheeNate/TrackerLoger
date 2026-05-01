@@ -27,10 +27,18 @@ import {
   insertSupervisorSchema,
   insertUserSchema,
   insertRopeHoursSchema,
+  NDTMethods,
 } from "@shared/schema";
 import { z } from "zod";
 import { compare, hash } from "bcrypt";
 import { createTechnicianCryptoIdentity } from "./crypto";
+import multer from "multer";
+import { randomUUID as cryptoRandomUUID } from "crypto";
+import {
+  ObjectStorageService,
+  ObjectNotFoundError,
+} from "./replit_integrations/object_storage/objectStorage";
+import { extractOJTRows, extractRopeRows } from "./extraction";
 
 // Extend express-session types
 declare module "express-session" {
@@ -1263,6 +1271,263 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       res.status(500).json({ message: "Error creating crypto identity" });
+    }
+  });
+
+  // ----- Import from signed log routes -----
+  const objectStorageService = new ObjectStorageService();
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB
+  });
+
+  const ALLOWED_IMPORT_MIMES = new Set([
+    "application/pdf",
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+  ]);
+
+  // Upload a signed-log file, run AI extraction, return parsed rows + key.
+  app.post(
+    "/api/imports/extract",
+    requireAuth,
+    upload.single("file"),
+    async (req, res) => {
+      try {
+        const userId = req.session.userId!;
+        const file = req.file;
+        const type = (req.body?.type ?? "").toString();
+
+        if (!file) {
+          return res.status(400).json({ message: "No file uploaded" });
+        }
+        if (type !== "ojt" && type !== "rope") {
+          return res
+            .status(400)
+            .json({ message: "Invalid type, must be 'ojt' or 'rope'" });
+        }
+        if (!ALLOWED_IMPORT_MIMES.has(file.mimetype)) {
+          return res.status(400).json({
+            message:
+              "Unsupported file type. Please upload a PDF or image (JPG, PNG, WEBP).",
+          });
+        }
+
+        // Save to object storage under imports/<userId>/<uuid>-<safeName>
+        const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const objectId = cryptoRandomUUID();
+        const relativePath = `imports/${userId}/${objectId}-${safeName}`;
+        const sourceDocumentKey = await objectStorageService.uploadBuffer(
+          relativePath,
+          file.buffer,
+          file.mimetype,
+        );
+
+        // Run AI extraction
+        let rows: unknown[] = [];
+        let extractionError: string | null = null;
+        try {
+          if (type === "ojt") {
+            rows = await extractOJTRows(file.buffer, file.mimetype);
+          } else {
+            rows = await extractRopeRows(file.buffer, file.mimetype);
+          }
+        } catch (err) {
+          console.error("Extraction error:", err);
+          extractionError =
+            err instanceof Error
+              ? err.message
+              : "Failed to read the document with AI";
+        }
+
+        return res.json({
+          sourceDocumentKey,
+          sourceDocumentName: file.originalname,
+          rows,
+          extractionError,
+        });
+      } catch (error) {
+        console.error("Import extract error:", error);
+        return res
+          .status(500)
+          .json({ message: "Error processing uploaded log" });
+      }
+    },
+  );
+
+  // Validation schemas for the commit endpoint
+  const validMethods = Object.keys(NDTMethods) as Array<
+    keyof typeof NDTMethods
+  >;
+  const ojtCommitRowSchema = z.object({
+    date: z.coerce.date(),
+    location: z.string().min(1).max(500),
+    method: z.enum(validMethods as [string, ...string[]]),
+    hours: z.number().positive().max(24),
+  });
+  const ropeCommitRowSchema = z.object({
+    startDate: z.coerce.date(),
+    endDate: z.coerce.date(),
+    location: z.string().min(1).max(500),
+    skills: z.string().min(1).max(2000),
+    hours: z.number().positive().max(24),
+  });
+  const commitBodySchema = z.object({
+    type: z.enum(["ojt", "rope"]),
+    sourceDocumentKey: z.string().regex(/^\/objects\/imports\//),
+    sourceDocumentName: z.string().min(1).max(500),
+    rows: z.array(z.unknown()).min(1).max(200),
+  });
+
+  // Commit reviewed rows from an extracted log as imported entries.
+  app.post("/api/imports/commit", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const body = commitBodySchema.parse(req.body);
+
+      // Verify the user actually uploaded that source document.
+      if (!body.sourceDocumentKey.startsWith(`/objects/imports/${userId}/`)) {
+        return res
+          .status(403)
+          .json({ message: "Source document does not belong to you" });
+      }
+
+      // Confirm the object exists before committing.
+      try {
+        await objectStorageService.getObjectEntityFile(body.sourceDocumentKey);
+      } catch {
+        return res
+          .status(400)
+          .json({ message: "Source document not found in storage" });
+      }
+
+      if (body.type === "ojt") {
+        const created = [];
+        for (const raw of body.rows) {
+          const row = ojtCommitRowSchema.parse(raw);
+          const entry = await storage.createImportedEntry(
+            {
+              userId,
+              date: row.date,
+              location: row.location,
+              method: row.method,
+              hours: row.hours,
+            },
+            body.sourceDocumentKey,
+            body.sourceDocumentName,
+          );
+          created.push(entry);
+        }
+        return res.status(201).json({ created });
+      } else {
+        const created = [];
+        for (const raw of body.rows) {
+          const row = ropeCommitRowSchema.parse(raw);
+          if (row.endDate < row.startDate) {
+            return res.status(400).json({
+              message: "End date must be on or after start date",
+            });
+          }
+          const ropeHour = await storage.createImportedRopeHour(
+            {
+              userId,
+              startDate: row.startDate,
+              endDate: row.endDate,
+              location: row.location,
+              skills: row.skills,
+              hours: row.hours,
+            },
+            body.sourceDocumentKey,
+            body.sourceDocumentName,
+          );
+          created.push(ropeHour);
+        }
+        return res.status(201).json({ created });
+      }
+    } catch (error) {
+      console.error("Import commit error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "Invalid import data",
+          errors: error.errors,
+        });
+      }
+      return res.status(500).json({ message: "Error committing import" });
+    }
+  });
+
+  // Get a short-lived signed URL for an imported source document, scoped
+  // by ownership (logged-in user) or by a valid verification token from a
+  // sibling entry/rope hour pointing to the same source.
+  app.get("/api/source-document", async (req, res) => {
+    try {
+      const recordType = (req.query.type ?? "").toString();
+      const recordId = parseInt((req.query.id ?? "").toString(), 10);
+      const token = (req.query.token ?? "").toString();
+
+      if (recordType !== "entry" && recordType !== "rope") {
+        return res.status(400).json({ message: "Invalid type" });
+      }
+      if (!Number.isFinite(recordId)) {
+        return res.status(400).json({ message: "Invalid id" });
+      }
+
+      const sessionUserId = req.session.userId;
+
+      let sourceKey: string | null = null;
+      let sourceName: string | null = null;
+      let allowed = false;
+
+      if (recordType === "entry") {
+        const entry = await storage.getEntry(recordId);
+        if (!entry || !entry.sourceDocumentKey) {
+          return res
+            .status(404)
+            .json({ message: "Source document not found" });
+        }
+        sourceKey = entry.sourceDocumentKey;
+        sourceName = entry.sourceDocumentName;
+        if (sessionUserId && entry.userId === sessionUserId) {
+          allowed = true;
+        } else if (token && entry.verificationToken === token) {
+          allowed = true;
+        }
+      } else {
+        const ropeHour = await storage.getRopeHour(recordId);
+        if (!ropeHour || !ropeHour.sourceDocumentKey) {
+          return res
+            .status(404)
+            .json({ message: "Source document not found" });
+        }
+        sourceKey = ropeHour.sourceDocumentKey;
+        sourceName = ropeHour.sourceDocumentName;
+        if (sessionUserId && ropeHour.userId === sessionUserId) {
+          allowed = true;
+        } else if (token && ropeHour.verificationToken === token) {
+          allowed = true;
+        }
+      }
+
+      if (!allowed || !sourceKey) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const url = await objectStorageService.getSignedDownloadURL(
+        sourceKey,
+        600,
+      );
+      return res.json({ url, name: sourceName });
+    } catch (error) {
+      console.error("Source document error:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.status(404).json({ message: "Source document not found" });
+      }
+      return res
+        .status(500)
+        .json({ message: "Error fetching source document" });
     }
   });
 

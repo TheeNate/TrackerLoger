@@ -7,13 +7,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
-import { Calendar, Clock, MapPin, Cable, User, Pencil } from "lucide-react";
+import { Calendar, Clock, MapPin, Cable, User, Pencil, Upload, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import { RopeHours } from "@shared/schema";
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { EditRopeHourDialog } from "@/components/EditRopeHourDialog";
+import { ImportLogDialog } from "@/components/ImportLogDialog";
+import { SourceDocumentLink } from "@/components/SourceDocumentLink";
 
 export default function RopeHoursPage() {
   const [startDate, setStartDate] = useState("");
@@ -23,6 +25,7 @@ export default function RopeHoursPage() {
   const [hours, setHours] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingRopeHour, setEditingRopeHour] = useState<RopeHours | null>(null);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const { toast } = useToast();
 
   // Query user data
@@ -143,9 +146,19 @@ export default function RopeHoursPage() {
       <ProfileHeader user={user} verifiedEntries={[]} />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center gap-2 mb-6">
-          <Cable className="h-8 w-8 text-blue-600" />
-          <h1 className="text-3xl font-bold">Rope Hours Tracking</h1>
+        <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Cable className="h-8 w-8 text-blue-600" />
+            <h1 className="text-3xl font-bold">Rope Hours Tracking</h1>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsImportDialogOpen(true)}
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Import from signed log
+          </Button>
         </div>
 
       {/* Total Hours Summary */}
@@ -256,11 +269,17 @@ export default function RopeHoursPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {ropeHours.map((entry: RopeHours) => (
+              {ropeHours.map((entry: RopeHours) => {
+                const isImported = !!entry.importedAt;
+                return (
                 <div
                   key={entry.id}
                   className={`p-4 border rounded-lg ${
-                    entry.verified ? "border-green-200 bg-green-50" : "border-gray-200"
+                    isImported
+                      ? "border-neutral-200 bg-neutral-50 text-neutral-600"
+                      : entry.verified
+                      ? "border-green-200 bg-green-50"
+                      : "border-gray-200"
                   }`}
                 >
                   <div className="flex justify-between items-start">
@@ -286,7 +305,21 @@ export default function RopeHoursPage() {
                           <span className="text-gray-700">{entry.skills}</span>
                         </div>
                       </div>
-                      {entry.verified && (
+                      {isImported ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <FileText className="h-4 w-4 text-neutral-500" />
+                          <span className="text-neutral-600 text-sm">
+                            Imported from signed log
+                            {entry.importedAt
+                              ? ` on ${format(new Date(entry.importedAt), "MMM dd, yyyy")}`
+                              : ""}
+                          </span>
+                          <SourceDocumentLink
+                            recordType="rope"
+                            recordId={entry.id}
+                          />
+                        </div>
+                      ) : entry.verified ? (
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-green-600" />
                           <span className="text-green-600">
@@ -294,10 +327,14 @@ export default function RopeHoursPage() {
                             {entry.verifiedAt ? format(new Date(entry.verifiedAt), "MMM dd, yyyy") : "N/A"}
                           </span>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                     <div className="flex items-center gap-2">
-                      {entry.verified ? (
+                      {isImported ? (
+                        <span className="px-2 py-1 bg-neutral-200 text-neutral-700 rounded text-sm">
+                          Imported
+                        </span>
+                      ) : entry.verified ? (
                         <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-sm">
                           Verified
                         </span>
@@ -339,12 +376,19 @@ export default function RopeHoursPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
       </Card>
       </main>
+
+      <ImportLogDialog
+        open={isImportDialogOpen}
+        onClose={() => setIsImportDialogOpen(false)}
+        type="rope"
+      />
 
       <EditRopeHourDialog
         ropeHour={editingRopeHour}

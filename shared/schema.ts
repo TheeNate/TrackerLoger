@@ -46,6 +46,10 @@ export const entries = pgTable("entries", {
   supervisorIpAddress: text("supervisor_ip_address"), // Supervisor's IP address during verification
   supervisorBrowserInfo: text("supervisor_browser_info"), // Supervisor's browser info
   employeeIdUsed: text("employee_id_used"), // Which employee ID was used for this entry
+  // Imported from signed log fields
+  sourceDocumentKey: text("source_document_key"), // Object storage path like "/objects/imports/<userId>/<uuid>"
+  sourceDocumentName: text("source_document_name"), // Original uploaded filename
+  importedAt: timestamp("imported_at"), // When this entry was imported from a signed log
 });
 
 export const insertEntrySchema = createInsertSchema(entries).pick({
@@ -107,6 +111,10 @@ export const ropeHours = pgTable("rope_hours", {
   supervisorIpAddress: text("supervisor_ip_address"), // Supervisor's IP address during verification
   supervisorBrowserInfo: text("supervisor_browser_info"), // Supervisor's browser info
   employeeIdUsed: text("employee_id_used"), // Which employee ID was used for this entry
+  // Imported from signed log fields
+  sourceDocumentKey: text("source_document_key"),
+  sourceDocumentName: text("source_document_name"),
+  importedAt: timestamp("imported_at"),
 });
 
 export const insertRopeHoursSchema = createInsertSchema(ropeHours).pick({

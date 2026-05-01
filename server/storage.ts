@@ -23,6 +23,11 @@ export interface IStorage {
   getEntryByVerificationToken(token: string): Promise<Entry | undefined>;
   getEntriesByBatchToken(token: string): Promise<Entry[]>;
   createEntry(entry: InsertEntry): Promise<Entry>;
+  createImportedEntry(
+    entry: InsertEntry,
+    sourceDocumentKey: string,
+    sourceDocumentName: string,
+  ): Promise<Entry>;
   updateEntry(id: number, updates: Partial<InsertEntry>): Promise<Entry>;
   verifyEntry(id: number, verifiedBy: string): Promise<Entry>;
   
@@ -31,6 +36,11 @@ export interface IStorage {
   getRopeHour(id: number): Promise<RopeHours | undefined>;
   getRopeHourByVerificationToken(token: string): Promise<RopeHours | undefined>;
   createRopeHour(ropeHour: InsertRopeHours): Promise<RopeHours>;
+  createImportedRopeHour(
+    ropeHour: InsertRopeHours,
+    sourceDocumentKey: string,
+    sourceDocumentName: string,
+  ): Promise<RopeHours>;
   updateRopeHour(id: number, updates: Partial<InsertRopeHours>): Promise<RopeHours>;
   verifyRopeHour(id: number, verifiedBy: string): Promise<RopeHours>;
   
@@ -101,6 +111,27 @@ export class DatabaseStorage implements IStorage {
     return newEntry;
   }
 
+  async createImportedEntry(
+    entry: InsertEntry,
+    sourceDocumentKey: string,
+    sourceDocumentName: string,
+  ): Promise<Entry> {
+    const now = new Date();
+    const [newEntry] = await db
+      .insert(entries)
+      .values({
+        ...entry,
+        verified: true,
+        verifiedBy: "Imported from signed log",
+        verifiedAt: now,
+        importedAt: now,
+        sourceDocumentKey,
+        sourceDocumentName,
+      })
+      .returning();
+    return newEntry;
+  }
+
   async updateEntry(id: number, updates: Partial<InsertEntry>): Promise<Entry> {
     const [updated] = await db
       .update(entries)
@@ -150,6 +181,27 @@ export class DatabaseStorage implements IStorage {
     const [newRopeHour] = await db
       .insert(ropeHours)
       .values({ ...ropeHour, verificationToken })
+      .returning();
+    return newRopeHour;
+  }
+
+  async createImportedRopeHour(
+    ropeHour: InsertRopeHours,
+    sourceDocumentKey: string,
+    sourceDocumentName: string,
+  ): Promise<RopeHours> {
+    const now = new Date();
+    const [newRopeHour] = await db
+      .insert(ropeHours)
+      .values({
+        ...ropeHour,
+        verified: true,
+        verifiedBy: "Imported from signed log",
+        verifiedAt: now,
+        importedAt: now,
+        sourceDocumentKey,
+        sourceDocumentName,
+      })
       .returning();
     return newRopeHour;
   }

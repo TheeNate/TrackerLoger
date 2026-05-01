@@ -50,7 +50,10 @@ async function runMigrations() {
         ADD COLUMN IF NOT EXISTS audit_trail JSON,
         ADD COLUMN IF NOT EXISTS supervisor_ip_address TEXT,
         ADD COLUMN IF NOT EXISTS supervisor_browser_info TEXT,
-        ADD COLUMN IF NOT EXISTS employee_id_used TEXT;
+        ADD COLUMN IF NOT EXISTS employee_id_used TEXT,
+        ADD COLUMN IF NOT EXISTS source_document_key TEXT,
+        ADD COLUMN IF NOT EXISTS source_document_name TEXT,
+        ADD COLUMN IF NOT EXISTS imported_at TIMESTAMP;
     `);
     await client.query(`
       ALTER TABLE rope_hours
@@ -62,7 +65,10 @@ async function runMigrations() {
         ADD COLUMN IF NOT EXISTS audit_trail JSON,
         ADD COLUMN IF NOT EXISTS supervisor_ip_address TEXT,
         ADD COLUMN IF NOT EXISTS supervisor_browser_info TEXT,
-        ADD COLUMN IF NOT EXISTS employee_id_used TEXT;
+        ADD COLUMN IF NOT EXISTS employee_id_used TEXT,
+        ADD COLUMN IF NOT EXISTS source_document_key TEXT,
+        ADD COLUMN IF NOT EXISTS source_document_name TEXT,
+        ADD COLUMN IF NOT EXISTS imported_at TIMESTAMP;
     `);
     await client.query(`
       ALTER TABLE supervisors
