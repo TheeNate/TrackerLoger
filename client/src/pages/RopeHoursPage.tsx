@@ -299,6 +299,51 @@ export default function RopeHoursPage() {
                 onChange={(e) => setSkills(e.target.value)}
                 required
               />
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {[
+                  "Aid Climbing",
+                  "Anchorage Systems",
+                  "Ascent",
+                  "Descent",
+                  "Deviation",
+                  "Dual Main Systems",
+                  "Hauling",
+                  "Lowering",
+                  "Re-anchor",
+                  "Retrievable Rope Systems",
+                  "Rope to Rope Transfer",
+                  "Tension Rope Systems",
+                ].map((skill) => {
+                  const tokens = skills
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                  const alreadyAdded = tokens.some(
+                    (t) => t.toLowerCase() === skill.toLowerCase(),
+                  );
+                  return (
+                    <Button
+                      key={skill}
+                      type="button"
+                      size="sm"
+                      variant={alreadyAdded ? "secondary" : "outline"}
+                      disabled={alreadyAdded}
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        setSkills((prev) => {
+                          const trimmed = prev.trim();
+                          if (!trimmed) return skill;
+                          return trimmed.endsWith(",")
+                            ? `${trimmed} ${skill}`
+                            : `${trimmed}, ${skill}`;
+                        });
+                      }}
+                    >
+                      {skill}
+                    </Button>
+                  );
+                })}
+              </div>
             </div>
             
             <div>
