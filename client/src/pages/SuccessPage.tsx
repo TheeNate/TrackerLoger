@@ -53,48 +53,85 @@ export default function SuccessPage() {
     );
   }
   
-  const { entry, user } = data;
-  
-  // Format method for display
-  let displayMethod = entry.method;
-  if (displayMethod === 'UT_THK') {
-    displayMethod = 'UT Thk.';
+  const { user, type, entry, ropeHour } = data as {
+    user: { name: string; employeeNumber: string };
+    type?: string;
+    entry?: { date: string; location: string; method: string; hours: number };
+    ropeHour?: { startDate: string; endDate: string; location: string; skills: string; hours: number };
+  };
+
+  const isRopeHour = type === "rope_hour" || (!!ropeHour && !entry);
+  const item = entry ?? ropeHour;
+
+  if (!item) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md text-center">
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+            <Check className="h-6 w-6 text-green-600" />
+          </div>
+          <h1 className="text-2xl font-semibold mb-2">Verification Complete</h1>
+          <p className="text-neutral-500">Thank you for verifying these hours. This page can now be closed.</p>
+        </div>
+      </div>
+    );
   }
-  
-  // Generate verification ID
+
+  let displayMethod = "";
+  if (!isRopeHour && entry) {
+    displayMethod = entry.method === "UT_THK" ? "UT Thk." : entry.method;
+  }
+
   const verificationId = `VER-${new Date().getTime().toString().slice(-8)}-${token.slice(0, 5).toUpperCase()}`;
-  
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md text-center">
         <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
           <Check className="h-6 w-6 text-green-600" />
         </div>
-        
+
         <h1 className="text-2xl font-semibold mb-2">Verification Complete</h1>
-        <p className="text-neutral-500 mb-6">Thank you for verifying these OJT hours.</p>
-        
+        <p className="text-neutral-500 mb-6">
+          Thank you for verifying these {isRopeHour ? "rope" : "OJT"} hours.
+        </p>
+
         <div className="bg-neutral-100 rounded-md p-4 mb-6 text-left">
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <dt className="text-neutral-500">Technician:</dt>
             <dd className="text-neutral-900 font-medium">{user.name}</dd>
             <dt className="text-neutral-500">Employee #:</dt>
             <dd className="text-neutral-900 font-medium">{user.employeeNumber}</dd>
-            <dt className="text-neutral-500">Date:</dt>
-            <dd className="text-neutral-900 font-medium">
-              {new Date(entry.date).toLocaleDateString()}
-            </dd>
+
+            {isRopeHour && ropeHour ? (
+              <>
+                <dt className="text-neutral-500">Date Range:</dt>
+                <dd className="text-neutral-900 font-medium">
+                  {new Date(ropeHour.startDate).toLocaleDateString()} - {new Date(ropeHour.endDate).toLocaleDateString()}
+                </dd>
+                <dt className="text-neutral-500">Skills:</dt>
+                <dd className="text-neutral-900 font-medium">{ropeHour.skills}</dd>
+              </>
+            ) : entry ? (
+              <>
+                <dt className="text-neutral-500">Date:</dt>
+                <dd className="text-neutral-900 font-medium">
+                  {new Date(entry.date).toLocaleDateString()}
+                </dd>
+                <dt className="text-neutral-500">Method:</dt>
+                <dd className="text-neutral-900 font-medium">{displayMethod}</dd>
+              </>
+            ) : null}
+
             <dt className="text-neutral-500">Location:</dt>
-            <dd className="text-neutral-900 font-medium">{entry.location}</dd>
-            <dt className="text-neutral-500">Method:</dt>
-            <dd className="text-neutral-900 font-medium">{displayMethod}</dd>
+            <dd className="text-neutral-900 font-medium">{item.location}</dd>
             <dt className="text-neutral-500">Hours:</dt>
-            <dd className="text-neutral-900 font-medium">{entry.hours.toFixed(1)}</dd>
+            <dd className="text-neutral-900 font-medium">{item.hours.toFixed(1)}</dd>
             <dt className="text-neutral-500">Verification ID:</dt>
             <dd className="text-neutral-900 font-medium">{verificationId}</dd>
           </dl>
         </div>
-        
+
         <p className="text-sm text-neutral-500">This page can now be closed.</p>
       </div>
     </div>
