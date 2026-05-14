@@ -1504,9 +1504,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let extractionError: string | null = null;
         try {
           if (type === "ojt") {
-            rows = await extractOJTRows(file.buffer, file.mimetype);
+            rows = await extractOJTRows(file.buffer, file.mimetype, file.originalname);
           } else {
-            rows = await extractRopeRows(file.buffer, file.mimetype);
+            rows = await extractRopeRows(file.buffer, file.mimetype, file.originalname);
           }
         } catch (err) {
           console.error("Extraction error:", err);

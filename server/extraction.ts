@@ -86,9 +86,20 @@ async function callVisionExtraction(
   buffer: Buffer,
   contentType: string,
   instructions: string,
+  filename: string,
 ): Promise<unknown> {
   const openai = getOpenAIClient();
   const dataUrl = `data:${contentType};base64,${buffer.toString("base64")}`;
+
+  const fileContent = isPdfMime(contentType)
+    ? ({
+        type: "file",
+        file: { filename, file_data: dataUrl },
+      } as const)
+    : ({
+        type: "image_url",
+        image_url: { url: dataUrl, detail: "high" },
+      } as const);
 
   const response = await openai.chat.completions.create({
     model: "gpt-5.4",
@@ -105,10 +116,7 @@ async function callVisionExtraction(
         role: "user",
         content: [
           { type: "text", text: instructions },
-          {
-            type: "image_url",
-            image_url: { url: dataUrl, detail: "high" },
-          },
+          fileContent,
         ],
       },
     ],
@@ -189,18 +197,18 @@ function sanitizeRopeRows(parsed: unknown): ExtractedRopeRow[] {
 export async function extractOJTRows(
   buffer: Buffer,
   contentType: string,
+  filename = "upload.pdf",
 ): Promise<ExtractedOJTRow[]> {
   if (!isImageMime(contentType) && !isPdfMime(contentType)) {
     throw new Error(
       "Unsupported file type. Please upload a PDF or image (JPG, PNG, WEBP).",
     );
   }
-  // The vision API supports image inputs natively. PDFs need to be sent the
-  // same way; OpenAI accepts PDFs as image_url data URLs in recent models.
   const parsed = await callVisionExtraction(
     buffer,
     contentType,
     OJT_INSTRUCTIONS,
+    filename,
   );
   return sanitizeOJTRows(parsed);
 }
@@ -208,6 +216,7 @@ export async function extractOJTRows(
 export async function extractRopeRows(
   buffer: Buffer,
   contentType: string,
+  filename = "upload.pdf",
 ): Promise<ExtractedRopeRow[]> {
   if (!isImageMime(contentType) && !isPdfMime(contentType)) {
     throw new Error(
@@ -218,6 +227,7 @@ export async function extractRopeRows(
     buffer,
     contentType,
     ROPE_INSTRUCTIONS,
+    filename,
   );
   return sanitizeRopeRows(parsed);
 }
