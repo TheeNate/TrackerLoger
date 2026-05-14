@@ -549,11 +549,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete an imported OJT entry. Only the owner can delete, and only if
-  // the entry was created via import (importedAt is set). Verified/signed
-  // non-imported entries cannot be removed here. When no other entry or
-  // rope-hour record references the same source document, the underlying
-  // object-storage file is deleted as well.
+  // Delete an OJT entry. Only the owner can delete their own entries.
+  // For imported entries, when no other entry or rope-hour record references
+  // the same source document, the underlying object-storage file is deleted
+  // as well.
   app.delete("/api/entries/:id", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId!;
@@ -570,11 +569,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res
           .status(403)
           .json({ message: "Unauthorized: Entry does not belong to you" });
-      }
-      if (!existing.importedAt) {
-        return res.status(400).json({
-          message: "Only imported entries can be removed from here",
-        });
       }
 
       const sourceKey = existing.sourceDocumentKey;
@@ -755,9 +749,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete an imported rope-hours record. Same rules as imported entries:
-  // owner-only, importedAt must be set, and the underlying source document
-  // is removed when no other record references it.
+  // Delete a rope-hours record. Owner-only. For imported records, the
+  // underlying source document is removed when no other record references
+  // it.
   app.delete("/api/rope-hours/:id", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId!;
@@ -774,11 +768,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res
           .status(403)
           .json({ message: "Unauthorized: Entry does not belong to you" });
-      }
-      if (!existing.importedAt) {
-        return res.status(400).json({
-          message: "Only imported rope hours can be removed from here",
-        });
       }
 
       const sourceKey = existing.sourceDocumentKey;

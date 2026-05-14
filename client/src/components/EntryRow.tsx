@@ -18,6 +18,57 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+function DeleteEntryButton({
+  entry,
+  isPending,
+  onConfirm,
+  warnVerified,
+}: {
+  entry: Entry;
+  isPending: boolean;
+  onConfirm: () => void;
+  warnVerified?: boolean;
+}) {
+  const formatDate = (date: Date | string) => new Date(date).toLocaleDateString();
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-xs px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+          aria-label="Delete entry"
+          title="Delete entry"
+          disabled={isPending}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this entry?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {warnVerified
+              ? "This entry has already been verified. "
+              : ""}
+            This will permanently delete the OJT entry from{" "}
+            {formatDate(entry.date)} at {entry.location}. This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onConfirm}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 interface EntryRowProps {
   entry: Entry;
   onVerifyRequest: (entry: Entry) => void;
@@ -37,7 +88,7 @@ export function EntryRow({ entry, onVerifyRequest, isSelected, onToggleSelect, o
     onSuccess: () => {
       toast({
         title: "Entry removed",
-        description: "The imported entry has been deleted.",
+        description: "The OJT entry has been deleted.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/entries"] });
     },
@@ -146,11 +197,17 @@ export function EntryRow({ entry, onVerifyRequest, isSelected, onToggleSelect, o
             </AlertDialog>
           </div>
         ) : entry.verified ? (
-          <div className="flex items-center">
+          <div className="flex items-center gap-2 flex-wrap">
             <svg className="mr-1.5 h-2 w-2 text-green-500" fill="currentColor" viewBox="0 0 8 8">
               <circle cx="4" cy="4" r="3" />
             </svg>
             <span className="text-green-700">Verified by {entry.verifiedBy}</span>
+            <DeleteEntryButton
+              entry={entry}
+              isPending={deleteMutation.isPending}
+              onConfirm={() => deleteMutation.mutate()}
+              warnVerified
+            />
           </div>
         ) : (
           <div className="flex items-center gap-2">
@@ -174,6 +231,11 @@ export function EntryRow({ entry, onVerifyRequest, isSelected, onToggleSelect, o
             >
               Request Verification
             </Button>
+            <DeleteEntryButton
+              entry={entry}
+              isPending={deleteMutation.isPending}
+              onConfirm={() => deleteMutation.mutate()}
+            />
           </div>
         )}
       </td>

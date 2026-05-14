@@ -136,7 +136,7 @@ describe("DELETE /api/entries/:id (imported entry cleanup)", () => {
     expect(mockDeleteObjectEntity).not.toHaveBeenCalled();
   });
 
-  it("returns 400 when the entry exists but is not imported", async () => {
+  it("deletes a non-imported (manual) entry without touching object storage", async () => {
     mockStorage.getEntry.mockResolvedValue({
       id: 2,
       userId: TEST_USER_ID,
@@ -145,9 +145,11 @@ describe("DELETE /api/entries/:id (imported entry cleanup)", () => {
       verified: true,
       verifiedBy: "Real Supervisor",
     });
+    mockStorage.deleteEntry.mockResolvedValue(undefined);
     const res = await request(app).delete("/api/entries/2");
-    expect(res.status).toBe(400);
-    expect(mockStorage.deleteEntry).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(mockStorage.deleteEntry).toHaveBeenCalledWith(2);
+    expect(mockStorage.countEntriesBySourceDocumentKey).not.toHaveBeenCalled();
     expect(mockDeleteObjectEntity).not.toHaveBeenCalled();
   });
 
@@ -257,7 +259,7 @@ describe("DELETE /api/rope-hours/:id (imported rope-hour cleanup)", () => {
     expect(mockDeleteObjectEntity).not.toHaveBeenCalled();
   });
 
-  it("returns 400 when the rope hour exists but is not imported", async () => {
+  it("deletes a non-imported (manual) rope hour without touching object storage", async () => {
     mockStorage.getRopeHour.mockResolvedValue({
       id: 2,
       userId: TEST_USER_ID,
@@ -265,9 +267,12 @@ describe("DELETE /api/rope-hours/:id (imported rope-hour cleanup)", () => {
       sourceDocumentKey: null,
       verified: true,
     });
+    mockStorage.deleteRopeHour.mockResolvedValue(undefined);
     const res = await request(app).delete("/api/rope-hours/2");
-    expect(res.status).toBe(400);
-    expect(mockStorage.deleteRopeHour).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(mockStorage.deleteRopeHour).toHaveBeenCalledWith(2);
+    expect(mockStorage.countRopeHoursBySourceDocumentKey).not.toHaveBeenCalled();
+    expect(mockDeleteObjectEntity).not.toHaveBeenCalled();
   });
 
   it("returns 404 when the rope hour does not exist", async () => {

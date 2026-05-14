@@ -115,16 +115,16 @@ export default function RopeHoursPage() {
     }
   };
 
-  const handleDeleteImported = async (ropeHourId: number) => {
+  const handleDeleteRopeHour = async (ropeHourId: number) => {
     try {
       await apiRequest("DELETE", `/api/rope-hours/${ropeHourId}`);
       toast({
         title: "Entry removed",
-        description: "The imported rope-hours entry has been deleted.",
+        description: "The rope-hours entry has been deleted.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/rope-hours"] });
     } catch (error: unknown) {
-      console.error("Error deleting imported rope hour:", error);
+      console.error("Error deleting rope hour:", error);
       const message =
         error instanceof Error ? error.message : "Please try again.";
       toast({
@@ -134,6 +134,44 @@ export default function RopeHoursPage() {
       });
     }
   };
+
+  const renderDeleteButton = (entry: RopeHours, warnVerified: boolean) => (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+          aria-label="Delete rope hours entry"
+          title="Delete entry"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this entry?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {warnVerified ? "This entry has already been verified. " : ""}
+            This will permanently delete the rope-hours entry from{" "}
+            {format(new Date(entry.startDate), "MMM dd, yyyy")} –{" "}
+            {format(new Date(entry.endDate), "MMM dd, yyyy")} at {entry.location}.
+            This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => handleDeleteRopeHour(entry.id)}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 
   const handleVerifyRequest = async (ropeHourId: number, supervisorId: number) => {
     try {
@@ -415,9 +453,12 @@ export default function RopeHoursPage() {
                           </AlertDialog>
                         </>
                       ) : entry.verified ? (
-                        <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-sm">
-                          Verified
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-sm">
+                            Verified
+                          </span>
+                          {renderDeleteButton(entry, true)}
+                        </div>
                       ) : (
                         <div className="flex items-center gap-2">
                           <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-sm">
@@ -451,6 +492,7 @@ export default function RopeHoursPage() {
                               </SelectContent>
                             </Select>
                           )}
+                          {renderDeleteButton(entry, false)}
                         </div>
                       )}
                     </div>
