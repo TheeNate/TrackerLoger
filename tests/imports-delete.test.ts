@@ -6,7 +6,8 @@ import request from "supertest";
 
 vi.mock("express-session", () => {
   const middleware = (_req: Request, _res: Response, next: NextFunction) => next();
-  const session: any = () => middleware;
+  type SessionFactory = (...args: unknown[]) => typeof middleware;
+  const session: SessionFactory = () => middleware;
   return { default: session };
 });
 
@@ -77,11 +78,27 @@ const SOURCE_KEY = "/objects/imports/42/abc-log.pdf";
 
 let sessionUserId: number | undefined;
 
+interface StubSession {
+  id: string;
+  userId: number | undefined;
+  save: (cb?: () => void) => void;
+}
+
+interface RequestWithSession extends Request {
+  session: StubSession;
+}
+
 async function buildApp(): Promise<Express> {
   const app = express();
   // Inject session BEFORE routes register their (mocked, no-op) session middleware.
   app.use((req, _res, next) => {
-    (req as any).session = { id: "test", userId: sessionUserId, save: (cb: () => void) => cb && cb() };
+    (req as RequestWithSession).session = {
+      id: "test",
+      userId: sessionUserId,
+      save: (cb?: () => void) => {
+        if (cb) cb();
+      },
+    };
     next();
   });
   app.use(express.json());
