@@ -48,11 +48,7 @@ export function OJTTable({
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-      <ImportedLogGroups
-        records={entries}
-        recordType="entry"
-        invalidateQueryKey="/api/entries"
-      />
+      <ImportedLogGroups records={entries} recordType="entry" />
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-neutral-900">Experience Hours (OJT) Log</h2>
         {selectedEntryIds.size >= 2 && (

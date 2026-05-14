@@ -35,13 +35,11 @@ interface ImportGroup {
 interface ImportedLogGroupsProps {
   records: ImportedRecord[];
   recordType: "entry" | "rope";
-  invalidateQueryKey: string;
 }
 
 export function ImportedLogGroups({
   records,
   recordType,
-  invalidateQueryKey,
 }: ImportedLogGroupsProps) {
   const { toast } = useToast();
 
@@ -78,9 +76,14 @@ export function ImportedLogGroups({
     onSuccess: () => {
       toast({
         title: "Import removed",
-        description: "All entries from that signed log were deleted.",
+        description:
+          "All OJT and rope-hour entries from that signed log were deleted.",
       });
-      queryClient.invalidateQueries({ queryKey: [invalidateQueryKey] });
+      // The endpoint deletes both OJT entries and rope hours that share the
+      // same sourceDocumentKey, so refresh both caches regardless of which
+      // page triggered the action.
+      queryClient.invalidateQueries({ queryKey: ["/api/entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rope-hours"] });
     },
     onError: (error: unknown) => {
       const message =

@@ -287,7 +287,6 @@ export default function RopeHoursPage() {
       <ImportedLogGroups
         records={ropeHours as RopeHours[]}
         recordType="rope"
-        invalidateQueryKey="/api/rope-hours"
       />
 
       {/* Rope Hours History */}
