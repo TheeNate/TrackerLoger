@@ -8,7 +8,7 @@ import {
 } from "@shared/schema";
 
 import { db } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
 export interface IStorage {
@@ -35,7 +35,9 @@ export interface IStorage {
   ): Promise<Entry[]>;
   updateEntry(id: number, updates: Partial<InsertEntry>): Promise<Entry>;
   verifyEntry(id: number, verifiedBy: string): Promise<Entry>;
-  
+  deleteEntry(id: number): Promise<void>;
+  countEntriesBySourceDocumentKey(sourceDocumentKey: string): Promise<number>;
+
   // Rope Hours methods
   getRopeHours(userId: number): Promise<RopeHours[]>;
   getRopeHour(id: number): Promise<RopeHours | undefined>;
@@ -53,7 +55,9 @@ export interface IStorage {
   ): Promise<RopeHours[]>;
   updateRopeHour(id: number, updates: Partial<InsertRopeHours>): Promise<RopeHours>;
   verifyRopeHour(id: number, verifiedBy: string): Promise<RopeHours>;
-  
+  deleteRopeHour(id: number): Promise<void>;
+  countRopeHoursBySourceDocumentKey(sourceDocumentKey: string): Promise<number>;
+
   // Supervisor methods
   getSupervisors(userId: number): Promise<Supervisor[]>;
   getSupervisor(id: number): Promise<Supervisor | undefined>;
@@ -182,6 +186,20 @@ export class DatabaseStorage implements IStorage {
     return entry;
   }
 
+  async deleteEntry(id: number): Promise<void> {
+    await db.delete(entries).where(eq(entries.id, id));
+  }
+
+  async countEntriesBySourceDocumentKey(
+    sourceDocumentKey: string,
+  ): Promise<number> {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(entries)
+      .where(eq(entries.sourceDocumentKey, sourceDocumentKey));
+    return row?.count ?? 0;
+  }
+
   // Rope Hours methods
   async getRopeHours(userId: number): Promise<RopeHours[]> {
     return await db
@@ -272,6 +290,20 @@ export class DatabaseStorage implements IStorage {
       .where(eq(ropeHours.id, id))
       .returning();
     return ropeHour;
+  }
+
+  async deleteRopeHour(id: number): Promise<void> {
+    await db.delete(ropeHours).where(eq(ropeHours.id, id));
+  }
+
+  async countRopeHoursBySourceDocumentKey(
+    sourceDocumentKey: string,
+  ): Promise<number> {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(ropeHours)
+      .where(eq(ropeHours.sourceDocumentKey, sourceDocumentKey));
+    return row?.count ?? 0;
   }
 
   // Supervisor methods

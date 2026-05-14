@@ -143,6 +143,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   });
 
+  // Shared object storage service (used for imported source-document
+  // upload, download, and cleanup on delete).
+  const objectStorageService = new ObjectStorageService();
+
   // Authentication middleware
   const requireAuth = (req: Request, res: Response, next: Function) => {
     console.log(
@@ -545,6 +549,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete an imported OJT entry. Only the owner can delete, and only if
+  // the entry was created via import (importedAt is set). Verified/signed
+  // non-imported entries cannot be removed here. When no other entry or
+  // rope-hour record references the same source document, the underlying
+  // object-storage file is deleted as well.
+  app.delete("/api/entries/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const id = parseInt(req.params.id);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ message: "Invalid entry id" });
+      }
+
+      const existing = await storage.getEntry(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Entry not found" });
+      }
+      if (existing.userId !== userId) {
+        return res
+          .status(403)
+          .json({ message: "Unauthorized: Entry does not belong to you" });
+      }
+      if (!existing.importedAt) {
+        return res.status(400).json({
+          message: "Only imported entries can be removed from here",
+        });
+      }
+
+      const sourceKey = existing.sourceDocumentKey;
+      await storage.deleteEntry(id);
+
+      if (sourceKey) {
+        const remainingEntries =
+          await storage.countEntriesBySourceDocumentKey(sourceKey);
+        const remainingRopeHours =
+          await storage.countRopeHoursBySourceDocumentKey(sourceKey);
+        if (remainingEntries === 0 && remainingRopeHours === 0) {
+          try {
+            await objectStorageService.deleteObjectEntity(sourceKey);
+          } catch (err) {
+            console.error(
+              "Failed to delete orphaned source document",
+              sourceKey,
+              err,
+            );
+          }
+        }
+      }
+
+      res.json({ message: "Entry removed" });
+    } catch (error) {
+      console.error("Error deleting entry:", error);
+      res.status(500).json({ message: "Error deleting entry" });
+    }
+  });
+
   // Supervisor routes
   app.get("/api/supervisors", requireAuth, async (req, res) => {
     try {
@@ -692,6 +752,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid rope hour data", errors: error.errors });
       }
       res.status(500).json({ message: "Error updating rope hour" });
+    }
+  });
+
+  // Delete an imported rope-hours record. Same rules as imported entries:
+  // owner-only, importedAt must be set, and the underlying source document
+  // is removed when no other record references it.
+  app.delete("/api/rope-hours/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const id = parseInt(req.params.id);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ message: "Invalid rope hour id" });
+      }
+
+      const existing = await storage.getRopeHour(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Rope hour not found" });
+      }
+      if (existing.userId !== userId) {
+        return res
+          .status(403)
+          .json({ message: "Unauthorized: Entry does not belong to you" });
+      }
+      if (!existing.importedAt) {
+        return res.status(400).json({
+          message: "Only imported rope hours can be removed from here",
+        });
+      }
+
+      const sourceKey = existing.sourceDocumentKey;
+      await storage.deleteRopeHour(id);
+
+      if (sourceKey) {
+        const remainingEntries =
+          await storage.countEntriesBySourceDocumentKey(sourceKey);
+        const remainingRopeHours =
+          await storage.countRopeHoursBySourceDocumentKey(sourceKey);
+        if (remainingEntries === 0 && remainingRopeHours === 0) {
+          try {
+            await objectStorageService.deleteObjectEntity(sourceKey);
+          } catch (err) {
+            console.error(
+              "Failed to delete orphaned source document",
+              sourceKey,
+              err,
+            );
+          }
+        }
+      }
+
+      res.json({ message: "Rope hour removed" });
+    } catch (error) {
+      console.error("Error deleting rope hour:", error);
+      res.status(500).json({ message: "Error deleting rope hour" });
     }
   });
 
@@ -1275,7 +1389,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ----- Import from signed log routes -----
-  const objectStorageService = new ObjectStorageService();
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB

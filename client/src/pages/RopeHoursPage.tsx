@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
-import { Calendar, Clock, MapPin, Cable, User, Pencil, Upload, FileText } from "lucide-react";
+import { Calendar, Clock, MapPin, Cable, User, Pencil, Upload, FileText, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
@@ -16,6 +16,17 @@ import { ProfileHeader } from "@/components/ProfileHeader";
 import { EditRopeHourDialog } from "@/components/EditRopeHourDialog";
 import { ImportLogDialog } from "@/components/ImportLogDialog";
 import { SourceDocumentLink } from "@/components/SourceDocumentLink";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function RopeHoursPage() {
   const [startDate, setStartDate] = useState("");
@@ -100,6 +111,26 @@ export default function RopeHoursPage() {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteImported = async (ropeHourId: number) => {
+    try {
+      await apiRequest("DELETE", `/api/rope-hours/${ropeHourId}`);
+      toast({
+        title: "Entry removed",
+        description: "The imported rope-hours entry has been deleted.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/rope-hours"] });
+    } catch (error: unknown) {
+      console.error("Error deleting imported rope hour:", error);
+      const message =
+        error instanceof Error ? error.message : "Please try again.";
+      toast({
+        title: "Could not remove entry",
+        description: message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -331,9 +362,52 @@ export default function RopeHoursPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       {isImported ? (
-                        <span className="px-2 py-1 bg-neutral-200 text-neutral-700 rounded text-sm">
-                          Imported
-                        </span>
+                        <>
+                          <span className="px-2 py-1 bg-neutral-200 text-neutral-700 rounded text-sm">
+                            Imported
+                          </span>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                aria-label="Remove imported rope hours entry"
+                                title="Remove imported entry"
+                              >
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                Remove
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Remove this imported entry?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will delete the imported rope-hours
+                                  entry from{" "}
+                                  {format(new Date(entry.startDate), "MMM dd, yyyy")}{" "}
+                                  – {format(new Date(entry.endDate), "MMM dd, yyyy")}{" "}
+                                  at {entry.location}. If no other entries
+                                  reference the uploaded log, the original
+                                  file will also be removed from storage. This
+                                  cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteImported(entry.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Remove
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </>
                       ) : entry.verified ? (
                         <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-sm">
                           Verified

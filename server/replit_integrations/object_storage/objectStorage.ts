@@ -185,6 +185,28 @@ export class ObjectStorageService {
     return buf;
   }
 
+  // Deletes an object entity (referenced by "/objects/<id>") from the bucket.
+  // Returns true if the file was deleted, false if it did not exist.
+  async deleteObjectEntity(objectPath: string): Promise<boolean> {
+    if (!objectPath.startsWith("/objects/")) {
+      throw new ObjectNotFoundError();
+    }
+    const entityId = objectPath.slice("/objects/".length);
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith("/")) {
+      entityDir = `${entityDir}/`;
+    }
+    const fullPath = `${entityDir}${entityId}`;
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    const file = objectStorageClient.bucket(bucketName).file(objectName);
+    const [exists] = await file.exists();
+    if (!exists) {
+      return false;
+    }
+    await file.delete({ ignoreNotFound: true });
+    return true;
+  }
+
   // Gets the upload URL for an object entity.
   async getObjectEntityUploadURL(): Promise<string> {
     const privateObjectDir = this.getPrivateObjectDir();
