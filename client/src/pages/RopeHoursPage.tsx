@@ -15,6 +15,7 @@ import { RopeHours } from "@shared/schema";
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { EditRopeHourDialog } from "@/components/EditRopeHourDialog";
 import { ImportLogDialog } from "@/components/ImportLogDialog";
+import { ImportedLogGroups } from "@/components/ImportedLogGroups";
 import { SourceDocumentLink } from "@/components/SourceDocumentLink";
 import {
   AlertDialog,
@@ -282,6 +283,12 @@ export default function RopeHoursPage() {
           </form>
         </CardContent>
       </Card>
+
+      <ImportedLogGroups
+        records={ropeHours as RopeHours[]}
+        recordType="rope"
+        invalidateQueryKey="/api/rope-hours"
+      />
 
       {/* Rope Hours History */}
       <Card>

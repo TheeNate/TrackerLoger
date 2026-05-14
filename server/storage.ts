@@ -36,6 +36,10 @@ export interface IStorage {
   updateEntry(id: number, updates: Partial<InsertEntry>): Promise<Entry>;
   verifyEntry(id: number, verifiedBy: string): Promise<Entry>;
   deleteEntry(id: number): Promise<void>;
+  deleteImportedEntriesBySourceDocumentKey(
+    userId: number,
+    sourceDocumentKey: string,
+  ): Promise<number>;
   countEntriesBySourceDocumentKey(sourceDocumentKey: string): Promise<number>;
 
   // Rope Hours methods
@@ -56,6 +60,10 @@ export interface IStorage {
   updateRopeHour(id: number, updates: Partial<InsertRopeHours>): Promise<RopeHours>;
   verifyRopeHour(id: number, verifiedBy: string): Promise<RopeHours>;
   deleteRopeHour(id: number): Promise<void>;
+  deleteImportedRopeHoursBySourceDocumentKey(
+    userId: number,
+    sourceDocumentKey: string,
+  ): Promise<number>;
   countRopeHoursBySourceDocumentKey(sourceDocumentKey: string): Promise<number>;
 
   // Supervisor methods
@@ -190,6 +198,23 @@ export class DatabaseStorage implements IStorage {
     await db.delete(entries).where(eq(entries.id, id));
   }
 
+  async deleteImportedEntriesBySourceDocumentKey(
+    userId: number,
+    sourceDocumentKey: string,
+  ): Promise<number> {
+    const deleted = await db
+      .delete(entries)
+      .where(
+        and(
+          eq(entries.userId, userId),
+          eq(entries.sourceDocumentKey, sourceDocumentKey),
+          sql`${entries.importedAt} is not null`,
+        ),
+      )
+      .returning({ id: entries.id });
+    return deleted.length;
+  }
+
   async countEntriesBySourceDocumentKey(
     sourceDocumentKey: string,
   ): Promise<number> {
@@ -294,6 +319,23 @@ export class DatabaseStorage implements IStorage {
 
   async deleteRopeHour(id: number): Promise<void> {
     await db.delete(ropeHours).where(eq(ropeHours.id, id));
+  }
+
+  async deleteImportedRopeHoursBySourceDocumentKey(
+    userId: number,
+    sourceDocumentKey: string,
+  ): Promise<number> {
+    const deleted = await db
+      .delete(ropeHours)
+      .where(
+        and(
+          eq(ropeHours.userId, userId),
+          eq(ropeHours.sourceDocumentKey, sourceDocumentKey),
+          sql`${ropeHours.importedAt} is not null`,
+        ),
+      )
+      .returning({ id: ropeHours.id });
+    return deleted.length;
   }
 
   async countRopeHoursBySourceDocumentKey(

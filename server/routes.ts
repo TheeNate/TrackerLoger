@@ -809,6 +809,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk-remove every imported entry (OJT and rope hours) that came from the
+  // same signed-log upload. Owner-only, imported-only. The underlying object
+  // is deleted once the last reference goes away.
+  app.delete("/api/imports", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const sourceDocumentKey = req.query.sourceDocumentKey;
+      if (
+        typeof sourceDocumentKey !== "string" ||
+        !sourceDocumentKey.startsWith("/objects/imports/")
+      ) {
+        return res
+          .status(400)
+          .json({ message: "Invalid sourceDocumentKey" });
+      }
+
+      const deletedEntries =
+        await storage.deleteImportedEntriesBySourceDocumentKey(
+          userId,
+          sourceDocumentKey,
+        );
+      const deletedRopeHours =
+        await storage.deleteImportedRopeHoursBySourceDocumentKey(
+          userId,
+          sourceDocumentKey,
+        );
+
+      if (deletedEntries === 0 && deletedRopeHours === 0) {
+        return res.status(404).json({
+          message: "No imported entries found for that signed log",
+        });
+      }
+
+      const remainingEntries =
+        await storage.countEntriesBySourceDocumentKey(sourceDocumentKey);
+      const remainingRopeHours =
+        await storage.countRopeHoursBySourceDocumentKey(sourceDocumentKey);
+      if (remainingEntries === 0 && remainingRopeHours === 0) {
+        try {
+          await objectStorageService.deleteObjectEntity(sourceDocumentKey);
+        } catch (err) {
+          console.error(
+            "Failed to delete orphaned source document",
+            sourceDocumentKey,
+            err,
+          );
+        }
+      }
+
+      res.json({
+        message: "Imported entries removed",
+        deletedEntries,
+        deletedRopeHours,
+      });
+    } catch (error) {
+      console.error("Error bulk-deleting imported entries:", error);
+      res.status(500).json({ message: "Error removing imported entries" });
+    }
+  });
+
   // Verification routes for rope hours
   app.post("/api/verify-request-rope/:ropeHourId", requireAuth, async (req, res) => {
     try {

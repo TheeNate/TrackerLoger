@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Entry } from "@shared/schema";
 import { EntryRow } from "@/components/EntryRow";
+import { ImportedLogGroups } from "@/components/ImportedLogGroups";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ListChecks } from "lucide-react";
@@ -47,6 +48,11 @@ export function OJTTable({
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+      <ImportedLogGroups
+        records={entries}
+        recordType="entry"
+        invalidateQueryKey="/api/entries"
+      />
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-neutral-900">Experience Hours (OJT) Log</h2>
         {selectedEntryIds.size >= 2 && (
