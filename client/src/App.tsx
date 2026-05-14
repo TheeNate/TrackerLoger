@@ -1,9 +1,12 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
+import { createIDBPersister } from "@/lib/offline";
+import { InstallPrompt } from "@/components/InstallPrompt";
+import { UpdatePrompt } from "@/components/UpdatePrompt";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/AuthPage";
 import ProfilePage from "@/pages/ProfilePage";
@@ -16,7 +19,8 @@ import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NewPasswordPage from "@/pages/NewPasswordPage";
 import AdminPage from "@/pages/AdminPage";
 import { ProtectedRoute } from "@/lib/protected-route";
-import { useEffect } from "react";
+
+const persister = createIDBPersister();
 
 function Router() {
   return (
@@ -55,14 +59,32 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister,
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+        buster: "ojt-v1",
+        dehydrateOptions: {
+          shouldDehydrateMutation: () => true,
+        },
+      }}
+      onSuccess={() => {
+        // Replay any mutations that were queued while offline.
+        queryClient.resumePausedMutations().catch(() => {
+          /* ignore */
+        });
+      }}
+    >
       <AuthProvider>
         <TooltipProvider>
           <Toaster />
           <Router />
+          <InstallPrompt />
+          <UpdatePrompt />
         </TooltipProvider>
       </AuthProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }
 

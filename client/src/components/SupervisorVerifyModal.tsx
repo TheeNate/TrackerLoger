@@ -88,6 +88,16 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
   const handleSubmit = async (values: SupervisorFormValues) => {
     if (!isBatchMode && !entry) return;
 
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast({
+        title: "Requires internet",
+        description:
+          "Connect to the internet to send a verification request to your supervisor.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     setCopied(false);
 

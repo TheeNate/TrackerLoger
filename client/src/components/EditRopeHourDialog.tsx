@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useOnlineStatus } from "@/lib/offline/online";
+import type { RopeDraft } from "@/lib/offline/mutations";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,14 +23,18 @@ interface EditRopeHourDialogProps {
   onClose: () => void;
 }
 
-export function EditRopeHourDialog({ ropeHour, open, onClose }: EditRopeHourDialogProps) {
+export function EditRopeHourDialog({
+  ropeHour,
+  open,
+  onClose,
+}: EditRopeHourDialogProps) {
   const { toast } = useToast();
+  const online = useOnlineStatus();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [location, setLocation] = useState("");
   const [skills, setSkills] = useState("");
   const [hours, setHours] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (ropeHour && open) {
@@ -40,49 +46,73 @@ export function EditRopeHourDialog({ ropeHour, open, onClose }: EditRopeHourDial
     }
   }, [ropeHour, open]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const updateMutation = useMutation<
+    unknown,
+    Error,
+    { id: number; patch: Partial<RopeDraft> }
+  >({
+    mutationKey: ["ropeHours.update"],
+    onError: (err) => {
+      toast({
+        title: "Could not save changes",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!ropeHour) return;
-
     if (!startDate || !endDate || !location || !skills || !hours) {
-      toast({ title: "Error", description: "Please fill in all fields", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "Please fill in all fields",
+        variant: "destructive",
+      });
       return;
     }
     if (new Date(startDate) >= new Date(endDate)) {
-      toast({ title: "Error", description: "End date must be after start date", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "End date must be after start date",
+        variant: "destructive",
+      });
       return;
     }
 
-    setIsSaving(true);
-    try {
-      const res = await apiRequest("PATCH", `/api/rope-hours/${ropeHour.id}`, {
+    updateMutation.mutate({
+      id: ropeHour.id,
+      patch: {
         startDate,
         endDate,
         location,
         skills,
         hours: parseFloat(hours),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Failed to update entry");
-      }
-      queryClient.invalidateQueries({ queryKey: ["/api/rope-hours"] });
-      toast({ title: "Entry updated", description: "Your changes have been saved." });
-      onClose();
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } finally {
-      setIsSaving(false);
-    }
+      },
+    });
+    toast({
+      title: online ? "Entry updated" : "Saved offline",
+      description: online
+        ? "Your changes have been saved."
+        : "We'll sync your edit when you reconnect.",
+    });
+    onClose();
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Edit Rope Hour Entry</DialogTitle>
           <DialogDescription>
-            Make changes to this entry. Once it's been verified, it can no longer be edited.
+            Make changes to this entry. Once it's been verified, it can no
+            longer be edited.
           </DialogDescription>
         </DialogHeader>
 
@@ -144,11 +174,11 @@ export function EditRopeHourDialog({ ropeHour, open, onClose }: EditRopeHourDial
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save Changes"}
+            <Button type="submit">
+              {online ? "Save Changes" : "Save Offline"}
             </Button>
           </DialogFooter>
         </form>

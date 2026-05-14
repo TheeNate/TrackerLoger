@@ -1,15 +1,28 @@
-import { useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useOnlineStatus } from "@/lib/offline/online";
+import type { EntryDraft } from "@/lib/offline/mutations";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Plus, X } from "lucide-react";
 import { z } from "zod";
-import { NDTMethods } from "@shared/schema";
 
 const formSchema = z.object({
   entries: z.array(
@@ -18,89 +31,67 @@ const formSchema = z.object({
       location: z.string().min(1, "Location is required"),
       method: z.string().min(1, "Method is required"),
       hours: z.number().min(0.1, "Hours must be greater than 0"),
-    })
+    }),
   ),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
+const emptyRow = () => ({
+  date: new Date().toISOString().split("T")[0],
+  location: "",
+  method: "",
+  hours: 0,
+});
+
 export function NewEntryForm() {
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  
+  const online = useOnlineStatus();
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      entries: [
-        {
-          date: new Date().toISOString().split("T")[0],
-          location: "",
-          method: "",
-          hours: 0,
-        },
-      ],
-    },
+    defaultValues: { entries: [emptyRow()] },
   });
-  
+
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "entries",
   });
-  
-  const handleAddEntry = () => {
-    append({
-      date: new Date().toISOString().split("T")[0],
-      location: "",
-      method: "",
-      hours: 0,
+
+  const createMutation = useMutation<unknown, Error, EntryDraft[]>({
+    mutationKey: ["entries.batch"],
+  });
+
+  const handleSubmit = (values: FormValues) => {
+    const drafts: EntryDraft[] = values.entries.map((e) => ({
+      date: e.date,
+      location: e.location,
+      method: e.method,
+      hours: Number(e.hours),
+    }));
+
+    createMutation.mutate(drafts, {
+      onError: (err) => {
+        toast({
+          title: "Could not save entries",
+          description: err.message,
+          variant: "destructive",
+        });
+      },
+    });
+
+    // Reset form + toast immediately — the optimistic cache update has
+    // already inserted these rows into the table. If we're offline, the
+    // mutation is queued and will sync when the connection returns.
+    form.reset({ entries: [emptyRow()] });
+    toast({
+      title: online ? "Entries added" : "Saved offline",
+      description: online
+        ? "Your OJT hours have been saved."
+        : "We'll sync these entries when you reconnect.",
     });
   };
-  
-  const handleSubmit = async (values: FormValues) => {
-    setIsSubmitting(true);
-    
-    try {
-      // Format entries for API
-      const formattedEntries = values.entries.map((entry) => ({
-        date: entry.date, // Server will convert to Date object
-        location: entry.location,
-        method: entry.method,
-        hours: Number(entry.hours),
-      }));
-      
-      await apiRequest("POST", "/api/entries", formattedEntries);
-      
-      // Reset form with a single empty entry
-      form.reset({
-        entries: [
-          {
-            date: new Date().toISOString().split("T")[0],
-            location: "",
-            method: "",
-            hours: 0,
-          },
-        ],
-      });
-      
-      // Invalidate entries query to refresh the table
-      queryClient.invalidateQueries({ queryKey: ["/api/entries"] });
-      
-      toast({
-        title: "Entries added",
-        description: "Your OJT hours have been saved successfully.",
-      });
-    } catch (error) {
-      console.error(error);
-      toast({
-        title: "Error",
-        description: "Failed to save entries. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-  
+
   const methodOptions = [
     { value: "ET", label: "ET" },
     { value: "RFT", label: "RFT" },
@@ -112,22 +103,34 @@ export function NewEntryForm() {
     { value: "PMI", label: "PMI" },
     { value: "LSI", label: "LSI" },
   ];
-  
+
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-      <h2 className="text-lg font-semibold text-neutral-900 mb-4">Add New OJT Hours</h2>
-      
+      <h2 className="text-lg font-semibold text-neutral-900 mb-4">
+        Add New OJT Hours
+      </h2>
+
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)}>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-neutral-200 mb-4">
               <thead>
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Job Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Job Location</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">NDT Method</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Hours</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                    Job Date
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                    Job Location
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                    NDT Method
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                    Hours
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-neutral-200">
@@ -186,7 +189,10 @@ export function NewEntryForm() {
                               </FormControl>
                               <SelectContent>
                                 {methodOptions.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
+                                  <SelectItem
+                                    key={option.value}
+                                    value={option.value}
+                                  >
                                     {option.label}
                                   </SelectItem>
                                 ))}
@@ -210,7 +216,11 @@ export function NewEntryForm() {
                                 step="0.5"
                                 placeholder="0.0"
                                 {...field}
-                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                onChange={(e) =>
+                                  field.onChange(
+                                    parseFloat(e.target.value) || 0,
+                                  )
+                                }
                                 className="w-full border-neutral-200 rounded-md focus:ring-primary focus:border-primary sm:text-sm"
                               />
                             </FormControl>
@@ -223,9 +233,7 @@ export function NewEntryForm() {
                       <button
                         type="button"
                         onClick={() => {
-                          if (fields.length > 1) {
-                            remove(index);
-                          }
+                          if (fields.length > 1) remove(index);
                         }}
                         className="text-neutral-500 hover:text-status-error focus:outline-none"
                         disabled={fields.length <= 1}
@@ -238,24 +246,20 @@ export function NewEntryForm() {
               </tbody>
             </table>
           </div>
-          
+
           <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center space-y-4 sm:space-y-0">
             <Button
               type="button"
               variant="outline"
-              onClick={handleAddEntry}
+              onClick={() => append(emptyRow())}
               className="inline-flex items-center"
             >
               <Plus className="mr-2 h-4 w-4" />
               Add Another Entry
             </Button>
-            
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className="inline-flex items-center"
-            >
-              {isSubmitting ? "Saving..." : "Save Entries"}
+
+            <Button type="submit" className="inline-flex items-center">
+              {online ? "Save Entries" : "Save Offline"}
             </Button>
           </div>
         </form>

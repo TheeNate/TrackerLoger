@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,9 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
-import { Calendar, Clock, MapPin, Cable, User, Pencil, Upload, FileText, Trash2 } from "lucide-react";
+import { Calendar, Clock, MapPin, Cable, User, Pencil, Upload, FileText, Trash2, CloudOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import { RopeHours } from "@shared/schema";
 import { ProfileHeader } from "@/components/ProfileHeader";
@@ -17,6 +16,8 @@ import { EditRopeHourDialog } from "@/components/EditRopeHourDialog";
 import { ImportLogDialog } from "@/components/ImportLogDialog";
 import { ImportedLogGroups } from "@/components/ImportedLogGroups";
 import { SourceDocumentLink } from "@/components/SourceDocumentLink";
+import { useOnlineStatus } from "@/lib/offline/online";
+import { isPendingSync, type RopeDraft } from "@/lib/offline/mutations";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,10 +36,32 @@ export default function RopeHoursPage() {
   const [location, setLocation] = useState("");
   const [skills, setSkills] = useState("");
   const [hours, setHours] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingRopeHour, setEditingRopeHour] = useState<RopeHours | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const { toast } = useToast();
+  const online = useOnlineStatus();
+
+  const createMutation = useMutation<unknown, Error, RopeDraft>({
+    mutationKey: ["ropeHours.create"],
+    onError: (err) => {
+      toast({
+        title: "Could not save rope hours",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation<unknown, Error, number>({
+    mutationKey: ["ropeHours.delete"],
+    onError: (err) => {
+      toast({
+        title: "Could not remove entry",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   // Query user data
   const { data: user, isLoading: isLoadingUser } = useQuery({
@@ -57,9 +80,9 @@ export default function RopeHoursPage() {
     enabled: !!user
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!startDate || !endDate || !location || !skills || !hours) {
       toast({
         title: "Error",
@@ -78,59 +101,41 @@ export default function RopeHoursPage() {
       return;
     }
 
-    setIsSubmitting(true);
+    createMutation.mutate({
+      startDate,
+      endDate,
+      location,
+      skills,
+      hours: parseFloat(hours),
+    });
 
-    try {
-      const response = await apiRequest("POST", "/api/rope-hours", {
-        startDate,
-        endDate,
-        location,
-        skills,
-        hours: parseFloat(hours),
-      });
+    // Optimistic UI inserts the row immediately — reset the form right away
+    // so the user can keep logging.
+    setStartDate("");
+    setEndDate("");
+    setLocation("");
+    setSkills("");
+    setHours("");
 
-      toast({
-        title: "Success",
-        description: "Rope hours logged successfully",
-      });
-      
-      // Reset form
-      setStartDate("");
-      setEndDate("");
-      setLocation("");
-      setSkills("");
-      setHours("");
-      
-      // Refresh data
-      queryClient.invalidateQueries({ queryKey: ["/api/rope-hours"] });
-    } catch (error) {
-      console.error("Error logging rope hours:", error);
-      toast({
-        title: "Error",
-        description: "Failed to log rope hours. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+    toast({
+      title: online ? "Rope hours logged" : "Saved offline",
+      description: online
+        ? "Your rope hours have been saved."
+        : "We'll sync this entry when you reconnect.",
+    });
   };
 
-  const handleDeleteRopeHour = async (ropeHourId: number) => {
-    try {
-      await apiRequest("DELETE", `/api/rope-hours/${ropeHourId}`);
+  const handleDeleteRopeHour = (ropeHourId: number) => {
+    deleteMutation.mutate(ropeHourId);
+    if (!online) {
+      toast({
+        title: "Removed offline",
+        description: "We'll sync this deletion when you reconnect.",
+      });
+    } else {
       toast({
         title: "Entry removed",
         description: "The rope-hours entry has been deleted.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/rope-hours"] });
-    } catch (error: unknown) {
-      console.error("Error deleting rope hour:", error);
-      const message =
-        error instanceof Error ? error.message : "Please try again.";
-      toast({
-        title: "Could not remove entry",
-        description: message,
-        variant: "destructive",
       });
     }
   };
@@ -174,6 +179,14 @@ export default function RopeHoursPage() {
   );
 
   const handleVerifyRequest = async (ropeHourId: number, supervisorId: number) => {
+    if (!online) {
+      toast({
+        title: "Requires internet",
+        description: "Connect to request verification from a supervisor.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       await apiRequest("POST", `/api/verify-request-rope/${ropeHourId}`, {
         supervisorId,
@@ -224,7 +237,20 @@ export default function RopeHoursPage() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => setIsImportDialogOpen(true)}
+            onClick={() => {
+              if (!online) {
+                toast({
+                  title: "Requires internet",
+                  description:
+                    "Importing a signed log uses AI and storage that needs a connection.",
+                  variant: "destructive",
+                });
+                return;
+              }
+              setIsImportDialogOpen(true);
+            }}
+            disabled={!online}
+            title={online ? "Import a signed log" : "Import requires internet"}
           >
             <Upload className="h-4 w-4 mr-2" />
             Import from signed log
@@ -360,8 +386,8 @@ export default function RopeHoursPage() {
               />
             </div>
             
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Logging..." : "Log Rope Hours"}
+            <Button type="submit">
+              {online ? "Log Rope Hours" : "Log Offline"}
             </Button>
           </form>
         </CardContent>
@@ -391,11 +417,14 @@ export default function RopeHoursPage() {
             <div className="space-y-4">
               {ropeHours.map((entry: RopeHours) => {
                 const isImported = !!entry.importedAt;
+                const pending = isPendingSync(entry as unknown as { id: number; _pendingSync?: boolean });
                 return (
                 <div
                   key={entry.id}
                   className={`p-4 border rounded-lg ${
-                    isImported
+                    pending
+                      ? "border-amber-200 bg-amber-50/60"
+                      : isImported
                       ? "border-neutral-200 bg-neutral-50 text-neutral-600"
                       : entry.verified
                       ? "border-green-200 bg-green-50"
@@ -450,7 +479,12 @@ export default function RopeHoursPage() {
                       ) : null}
                     </div>
                     <div className="flex items-center gap-2">
-                      {isImported ? (
+                      {pending ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs">
+                          <CloudOff className="h-3 w-3" />
+                          Pending sync
+                        </span>
+                      ) : isImported ? (
                         <>
                           <span className="px-2 py-1 bg-neutral-200 text-neutral-700 rounded text-sm">
                             Imported
@@ -488,7 +522,7 @@ export default function RopeHoursPage() {
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => handleDeleteImported(entry.id)}
+                                  onClick={() => handleDeleteRopeHour(entry.id)}
                                   className="bg-red-600 hover:bg-red-700"
                                 >
                                   Remove
@@ -523,10 +557,11 @@ export default function RopeHoursPage() {
                           )}
                           {supervisors.length > 0 && (
                             <Select
+                              disabled={!online}
                               onValueChange={(value) => handleVerifyRequest(entry.id, parseInt(value))}
                             >
-                              <SelectTrigger className="w-48">
-                                <SelectValue placeholder="Request Verification" />
+                              <SelectTrigger className="w-48" title={online ? "" : "Verification requires internet"}>
+                                <SelectValue placeholder={online ? "Request Verification" : "Verify (online only)"} />
                               </SelectTrigger>
                               <SelectContent>
                                 {supervisors.map((supervisor: any) => (

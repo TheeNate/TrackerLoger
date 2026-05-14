@@ -1,7 +1,7 @@
 import { Entry } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Pencil, FileText, Trash2 } from "lucide-react";
+import { Pencil, FileText, Trash2, CloudOff } from "lucide-react";
 import { SourceDocumentLink } from "@/components/SourceDocumentLink";
 import {
   AlertDialog,
@@ -15,8 +15,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useOnlineStatus } from "@/lib/offline/online";
+import { isPendingSync } from "@/lib/offline/mutations";
 
 function DeleteEntryButton({
   entry,
@@ -29,7 +30,8 @@ function DeleteEntryButton({
   onConfirm: () => void;
   warnVerified?: boolean;
 }) {
-  const formatDate = (date: Date | string) => new Date(date).toLocaleDateString();
+  const formatDate = (date: Date | string) =>
+    new Date(date).toLocaleDateString();
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
@@ -48,9 +50,7 @@ function DeleteEntryButton({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete this entry?</AlertDialogTitle>
           <AlertDialogDescription>
-            {warnVerified
-              ? "This entry has already been verified. "
-              : ""}
+            {warnVerified ? "This entry has already been verified. " : ""}
             This will permanently delete the OJT entry from{" "}
             {formatDate(entry.date)} at {entry.location}. This cannot be undone.
           </AlertDialogDescription>
@@ -77,50 +77,83 @@ interface EntryRowProps {
   onEdit?: (entry: Entry) => void;
 }
 
-export function EntryRow({ entry, onVerifyRequest, isSelected, onToggleSelect, onEdit }: EntryRowProps) {
+export function EntryRow({
+  entry,
+  onVerifyRequest,
+  isSelected,
+  onToggleSelect,
+  onEdit,
+}: EntryRowProps) {
   const isImported = !!entry.importedAt;
   const { toast } = useToast();
+  const online = useOnlineStatus();
+  const pendingSync = isPendingSync(
+    entry as unknown as { id: number; _pendingSync?: boolean },
+  );
 
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("DELETE", `/api/entries/${entry.id}`);
-    },
-    onSuccess: () => {
-      toast({
-        title: "Entry removed",
-        description: "The OJT entry has been deleted.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/entries"] });
-    },
-    onError: (error: unknown) => {
-      const message =
-        error instanceof Error ? error.message : "Please try again.";
+  const deleteMutation = useMutation<unknown, Error, number>({
+    mutationKey: ["entries.delete"],
+    onError: (error) => {
       toast({
         title: "Could not remove entry",
-        description: message,
+        description: error.message,
         variant: "destructive",
       });
     },
   });
 
-  const formatDate = (date: Date | string) => {
-    return new Date(date).toLocaleDateString();
+  const handleDelete = () => {
+    deleteMutation.mutate(entry.id);
+    if (!online) {
+      toast({
+        title: "Removed offline",
+        description: "We'll sync this deletion when you reconnect.",
+      });
+    } else {
+      toast({
+        title: "Entry removed",
+        description: "The OJT entry has been deleted.",
+      });
+    }
   };
+
+  const handleVerifyClick = () => {
+    if (!online) {
+      toast({
+        title: "Requires internet",
+        description: "Connect to the internet to request verification.",
+        variant: "destructive",
+      });
+      return;
+    }
+    onVerifyRequest(entry);
+  };
+
+  const formatDate = (date: Date | string) =>
+    new Date(date).toLocaleDateString();
 
   const cellTextClass = isImported ? "text-neutral-500" : "text-neutral-900";
 
   const createHourCell = (method: string) => {
     if (entry.method === method) {
       return (
-        <td className={`px-4 py-3 whitespace-nowrap text-sm ${cellTextClass}`}>
+        <td
+          className={`px-4 py-3 whitespace-nowrap text-sm ${cellTextClass}`}
+        >
           {entry.hours.toFixed(1)}
         </td>
       );
     }
-    return <td className={`px-4 py-3 whitespace-nowrap text-sm ${cellTextClass}`}></td>;
+    return (
+      <td
+        className={`px-4 py-3 whitespace-nowrap text-sm ${cellTextClass}`}
+      ></td>
+    );
   };
 
-  const rowClass = isImported
+  const rowClass = pendingSync
+    ? "bg-amber-50/60"
+    : isImported
     ? "bg-neutral-50 text-neutral-500"
     : entry.verified
     ? "bg-green-50"
@@ -131,13 +164,16 @@ export function EntryRow({ entry, onVerifyRequest, isSelected, onToggleSelect, o
   return (
     <tr className={rowClass}>
       <td className="px-3 py-3 whitespace-nowrap">
-        {!entry.verified && !isImported && onToggleSelect && (
-          <Checkbox
-            checked={isSelected ?? false}
-            onCheckedChange={() => onToggleSelect(entry.id)}
-            aria-label="Select entry"
-          />
-        )}
+        {!entry.verified &&
+          !isImported &&
+          !pendingSync &&
+          onToggleSelect && (
+            <Checkbox
+              checked={isSelected ?? false}
+              onCheckedChange={() => onToggleSelect(entry.id)}
+              aria-label="Select entry"
+            />
+          )}
       </td>
       <td className={`px-4 py-3 whitespace-nowrap text-sm ${cellTextClass}`}>
         {formatDate(entry.date)}
@@ -155,7 +191,14 @@ export function EntryRow({ entry, onVerifyRequest, isSelected, onToggleSelect, o
       {createHourCell("PMI")}
       {createHourCell("LSI")}
       <td className="px-4 py-3 whitespace-nowrap text-sm">
-        {isImported ? (
+        {pendingSync ? (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs">
+              <CloudOff className="h-3 w-3" />
+              Pending sync
+            </span>
+          </div>
+        ) : isImported ? (
           <div className="flex items-center gap-2 flex-wrap">
             <FileText className="h-3.5 w-3.5 text-neutral-500" />
             <span className="text-neutral-600">Imported from signed log</span>
@@ -176,7 +219,9 @@ export function EntryRow({ entry, onVerifyRequest, isSelected, onToggleSelect, o
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Remove this imported entry?</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    Remove this imported entry?
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
                     This will delete the imported OJT entry from{" "}
                     {formatDate(entry.date)} at {entry.location}. If no other
@@ -187,7 +232,7 @@ export function EntryRow({ entry, onVerifyRequest, isSelected, onToggleSelect, o
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction
-                    onClick={() => deleteMutation.mutate()}
+                    onClick={handleDelete}
                     className="bg-red-600 hover:bg-red-700"
                   >
                     Remove
@@ -198,14 +243,20 @@ export function EntryRow({ entry, onVerifyRequest, isSelected, onToggleSelect, o
           </div>
         ) : entry.verified ? (
           <div className="flex items-center gap-2 flex-wrap">
-            <svg className="mr-1.5 h-2 w-2 text-green-500" fill="currentColor" viewBox="0 0 8 8">
+            <svg
+              className="mr-1.5 h-2 w-2 text-green-500"
+              fill="currentColor"
+              viewBox="0 0 8 8"
+            >
               <circle cx="4" cy="4" r="3" />
             </svg>
-            <span className="text-green-700">Verified by {entry.verifiedBy}</span>
+            <span className="text-green-700">
+              Verified by {entry.verifiedBy}
+            </span>
             <DeleteEntryButton
               entry={entry}
               isPending={deleteMutation.isPending}
-              onConfirm={() => deleteMutation.mutate()}
+              onConfirm={handleDelete}
               warnVerified
             />
           </div>
@@ -224,17 +275,23 @@ export function EntryRow({ entry, onVerifyRequest, isSelected, onToggleSelect, o
               </Button>
             )}
             <Button
-              onClick={() => onVerifyRequest(entry)}
+              onClick={handleVerifyClick}
               size="sm"
               variant="outline"
               className="text-xs"
+              disabled={!online}
+              title={
+                online
+                  ? "Request verification"
+                  : "Requires internet to request verification"
+              }
             >
               Request Verification
             </Button>
             <DeleteEntryButton
               entry={entry}
               isPending={deleteMutation.isPending}
-              onConfirm={() => deleteMutation.mutate()}
+              onConfirm={handleDelete}
             />
           </div>
         )}

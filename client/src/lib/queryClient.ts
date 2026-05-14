@@ -45,12 +45,22 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
+      // offlineFirst lets cached data render while offline instead of
+      // surfacing a network error.
+      networkMode: "offlineFirst",
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      // Allow rehydrated cache to be considered fresh briefly so the UI
+      // doesn't flicker into error states on cold start.
+      staleTime: 30 * 1000,
+      gcTime: 1000 * 60 * 60 * 24 * 7, // 7 days — needed for persistence
       retry: false,
     },
     mutations: {
+      // Mutations pause when offline and resume on reconnect. Specific
+      // mutations register their mutationFn via setMutationDefaults so
+      // paused mutations can be replayed after a page reload.
+      networkMode: "offlineFirst",
       retry: false,
     },
   },

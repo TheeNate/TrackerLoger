@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useOnlineStatus } from "@/lib/offline/online";
+import type { EntryDraft } from "@/lib/offline/mutations";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,9 +15,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Entry } from "@shared/schema";
 
 const formSchema = z.object({
@@ -45,9 +60,13 @@ interface EditEntryDialogProps {
   onClose: () => void;
 }
 
-export function EditEntryDialog({ entry, open, onClose }: EditEntryDialogProps) {
+export function EditEntryDialog({
+  entry,
+  open,
+  onClose,
+}: EditEntryDialogProps) {
   const { toast } = useToast();
-  const [isSaving, setIsSaving] = useState(false);
+  const online = useOnlineStatus();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -65,49 +84,71 @@ export function EditEntryDialog({ entry, open, onClose }: EditEntryDialogProps) 
     }
   }, [entry, open, form]);
 
-  const handleSubmit = async (values: FormValues) => {
+  const updateMutation = useMutation<
+    unknown,
+    Error,
+    { id: number; patch: Partial<EntryDraft> }
+  >({
+    mutationKey: ["entries.update"],
+    onError: (err) => {
+      toast({
+        title: "Could not save changes",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSubmit = (values: FormValues) => {
     if (!entry) return;
-    setIsSaving(true);
-    try {
-      const res = await apiRequest("PATCH", `/api/entries/${entry.id}`, {
+    updateMutation.mutate({
+      id: entry.id,
+      patch: {
         date: values.date,
         location: values.location,
         method: values.method,
         hours: Number(values.hours),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Failed to update entry");
-      }
-      queryClient.invalidateQueries({ queryKey: ["/api/entries"] });
-      toast({ title: "Entry updated", description: "Your changes have been saved." });
-      onClose();
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } finally {
-      setIsSaving(false);
-    }
+      },
+    });
+    toast({
+      title: online ? "Entry updated" : "Saved offline",
+      description: online
+        ? "Your changes have been saved."
+        : "We'll sync your edit when you reconnect.",
+    });
+    onClose();
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Edit OJT Entry</DialogTitle>
           <DialogDescription>
-            Make changes to this entry. Once it's been verified, it can no longer be edited.
+            Make changes to this entry. Once it's been verified, it can no
+            longer be edited.
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <form
+            onSubmit={form.handleSubmit(handleSubmit)}
+            className="space-y-4"
+          >
             <FormField
               control={form.control}
               name="date"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Job Date</FormLabel>
-                  <FormControl><Input type="date" {...field} /></FormControl>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -118,7 +159,9 @@ export function EditEntryDialog({ entry, open, onClose }: EditEntryDialogProps) 
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Job Location</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -131,11 +174,15 @@ export function EditEntryDialog({ entry, open, onClose }: EditEntryDialogProps) 
                   <FormLabel>NDT Method</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
-                      <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select method" />
+                      </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       {methodOptions.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -155,7 +202,9 @@ export function EditEntryDialog({ entry, open, onClose }: EditEntryDialogProps) 
                       min="0"
                       step="0.5"
                       {...field}
-                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                      onChange={(e) =>
+                        field.onChange(parseFloat(e.target.value) || 0)
+                      }
                     />
                   </FormControl>
                   <FormMessage />
@@ -164,11 +213,11 @@ export function EditEntryDialog({ entry, open, onClose }: EditEntryDialogProps) 
             />
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
+              <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSaving}>
-                {isSaving ? "Saving..." : "Save Changes"}
+              <Button type="submit">
+                {online ? "Save Changes" : "Save Offline"}
               </Button>
             </DialogFooter>
           </form>
