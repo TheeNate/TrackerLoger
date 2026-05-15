@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
-import { Calendar, Clock, MapPin, Cable, User, Pencil, Upload, FileText, Trash2, CloudOff } from "lucide-react";
+import { Calendar, Clock, MapPin, Cable, User, Pencil, Upload, FileText, Trash2, CloudOff, AlertTriangle, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { RopeHours } from "@shared/schema";
@@ -17,7 +17,14 @@ import { ImportLogDialog } from "@/components/ImportLogDialog";
 import { ImportedLogGroups } from "@/components/ImportedLogGroups";
 import { SourceDocumentLink } from "@/components/SourceDocumentLink";
 import { useOnlineStatus } from "@/lib/offline/online";
-import { isPendingSync, type RopeDraft } from "@/lib/offline/mutations";
+import {
+  isPendingSync,
+  getSyncFailure,
+  nextTempId,
+  retryFailedRope,
+  discardFailedRope,
+  type RopeDraft,
+} from "@/lib/offline/mutations";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,15 +48,12 @@ export default function RopeHoursPage() {
   const { toast } = useToast();
   const online = useOnlineStatus();
 
-  const createMutation = useMutation<unknown, Error, RopeDraft>({
+  const createMutation = useMutation<
+    unknown,
+    Error,
+    { tempId: number; draft: RopeDraft }
+  >({
     mutationKey: ["ropeHours.create"],
-    onError: (err) => {
-      toast({
-        title: "Could not save rope hours",
-        description: err.message,
-        variant: "destructive",
-      });
-    },
   });
 
   const deleteMutation = useMutation<unknown, Error, number>({
@@ -102,11 +106,14 @@ export default function RopeHoursPage() {
     }
 
     createMutation.mutate({
-      startDate,
-      endDate,
-      location,
-      skills,
-      hours: parseFloat(hours),
+      tempId: nextTempId(),
+      draft: {
+        startDate,
+        endDate,
+        location,
+        skills,
+        hours: parseFloat(hours),
+      },
     });
 
     // Optimistic UI inserts the row immediately — reset the form right away
@@ -127,17 +134,33 @@ export default function RopeHoursPage() {
 
   const handleDeleteRopeHour = (ropeHourId: number) => {
     deleteMutation.mutate(ropeHourId);
-    if (!online) {
-      toast({
-        title: "Removed offline",
-        description: "We'll sync this deletion when you reconnect.",
-      });
-    } else {
-      toast({
-        title: "Entry removed",
-        description: "The rope-hours entry has been deleted.",
-      });
-    }
+    toast({
+      title:
+        ropeHourId < 0
+          ? "Removed pending entry"
+          : online
+          ? "Entry removed"
+          : "Removed offline",
+      description:
+        ropeHourId < 0
+          ? "The unsynced entry was discarded."
+          : online
+          ? "The rope-hours entry has been deleted."
+          : "We'll sync this deletion when you reconnect.",
+    });
+  };
+
+  const handleRetryRope = (entry: RopeHours) => {
+    retryFailedRope(entry);
+    toast({ title: "Retrying…", description: "Sending this entry again." });
+  };
+
+  const handleDiscardRope = (entry: RopeHours) => {
+    discardFailedRope(entry);
+    toast({
+      title: "Entry discarded",
+      description: "The failed entry has been removed.",
+    });
   };
 
   const renderDeleteButton = (entry: RopeHours, warnVerified: boolean) => (
@@ -417,12 +440,16 @@ export default function RopeHoursPage() {
             <div className="space-y-4">
               {ropeHours.map((entry: RopeHours) => {
                 const isImported = !!entry.importedAt;
-                const pending = isPendingSync(entry as unknown as { id: number; _pendingSync?: boolean });
+                const e = entry as RopeHours & { _pendingSync?: boolean; _syncFailed?: string | null };
+                const pending = isPendingSync(e);
+                const failed = getSyncFailure(e);
                 return (
                 <div
                   key={entry.id}
                   className={`p-4 border rounded-lg ${
-                    pending
+                    failed
+                      ? "border-red-200 bg-red-50/60"
+                      : pending
                       ? "border-amber-200 bg-amber-50/60"
                       : isImported
                       ? "border-neutral-200 bg-neutral-50 text-neutral-600"
@@ -478,12 +505,62 @@ export default function RopeHoursPage() {
                         </div>
                       ) : null}
                     </div>
-                    <div className="flex items-center gap-2">
-                      {pending ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs">
-                          <CloudOff className="h-3 w-3" />
-                          Pending sync
-                        </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {failed ? (
+                        <>
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs"
+                            title={failed}
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            Sync failed
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7 px-2"
+                            onClick={() => handleRetryRope(entry)}
+                            disabled={!online}
+                          >
+                            <RefreshCw className="h-3 w-3 mr-1" />
+                            Retry
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-xs h-7 px-2"
+                            onClick={() => setEditingRopeHour(entry)}
+                            aria-label="Edit entry"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-xs h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => handleDiscardRope(entry)}
+                            aria-label="Discard failed entry"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      ) : pending ? (
+                        <>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs">
+                            <CloudOff className="h-3 w-3" />
+                            Pending sync
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-xs h-7 px-2"
+                            onClick={() => setEditingRopeHour(entry)}
+                            aria-label="Edit entry"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          {renderDeleteButton(entry, false)}
+                        </>
                       ) : isImported ? (
                         <>
                           <span className="px-2 py-1 bg-neutral-200 text-neutral-700 rounded text-sm">

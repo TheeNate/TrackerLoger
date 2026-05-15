@@ -1,7 +1,14 @@
 import { Entry } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Pencil, FileText, Trash2, CloudOff } from "lucide-react";
+import {
+  Pencil,
+  FileText,
+  Trash2,
+  CloudOff,
+  AlertTriangle,
+  RefreshCw,
+} from "lucide-react";
 import { SourceDocumentLink } from "@/components/SourceDocumentLink";
 import {
   AlertDialog,
@@ -17,7 +24,12 @@ import {
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useOnlineStatus } from "@/lib/offline/online";
-import { isPendingSync } from "@/lib/offline/mutations";
+import {
+  isPendingSync,
+  getSyncFailure,
+  retryFailedEntry,
+  discardFailedEntry,
+} from "@/lib/offline/mutations";
 
 function DeleteEntryButton({
   entry,
@@ -87,9 +99,12 @@ export function EntryRow({
   const isImported = !!entry.importedAt;
   const { toast } = useToast();
   const online = useOnlineStatus();
-  const pendingSync = isPendingSync(
-    entry as unknown as { id: number; _pendingSync?: boolean },
-  );
+  const e = entry as Entry & {
+    _pendingSync?: boolean;
+    _syncFailed?: string | null;
+  };
+  const pendingSync = isPendingSync(e);
+  const syncFailed = getSyncFailure(e);
 
   const deleteMutation = useMutation<unknown, Error, number>({
     mutationKey: ["entries.delete"],
@@ -104,17 +119,20 @@ export function EntryRow({
 
   const handleDelete = () => {
     deleteMutation.mutate(entry.id);
-    if (!online) {
-      toast({
-        title: "Removed offline",
-        description: "We'll sync this deletion when you reconnect.",
-      });
-    } else {
-      toast({
-        title: "Entry removed",
-        description: "The OJT entry has been deleted.",
-      });
-    }
+    toast({
+      title:
+        entry.id < 0
+          ? "Removed pending entry"
+          : online
+          ? "Entry removed"
+          : "Removed offline",
+      description:
+        entry.id < 0
+          ? "The unsynced entry was discarded."
+          : online
+          ? "The OJT entry has been deleted."
+          : "We'll sync this deletion when you reconnect.",
+    });
   };
 
   const handleVerifyClick = () => {
@@ -126,7 +144,31 @@ export function EntryRow({
       });
       return;
     }
+    if (pendingSync) {
+      toast({
+        title: "Wait for sync",
+        description:
+          "This entry hasn't synced yet. It will be available for verification once it syncs.",
+      });
+      return;
+    }
     onVerifyRequest(entry);
+  };
+
+  const handleRetry = () => {
+    retryFailedEntry(entry);
+    toast({
+      title: "Retrying…",
+      description: "Sending this entry again.",
+    });
+  };
+
+  const handleDiscard = () => {
+    discardFailedEntry(entry);
+    toast({
+      title: "Entry discarded",
+      description: "The failed entry has been removed.",
+    });
   };
 
   const formatDate = (date: Date | string) =>
@@ -151,7 +193,9 @@ export function EntryRow({
     );
   };
 
-  const rowClass = pendingSync
+  const rowClass = syncFailed
+    ? "bg-red-50/60"
+    : pendingSync
     ? "bg-amber-50/60"
     : isImported
     ? "bg-neutral-50 text-neutral-500"
@@ -161,12 +205,17 @@ export function EntryRow({
     ? "bg-blue-50"
     : "";
 
+  // Pending (unsynced) and failed rows are always editable/deletable.
+  // Verified and imported rows have their own action sets below.
+  const showPendingControls = (pendingSync || !!syncFailed) && !isImported;
+
   return (
     <tr className={rowClass}>
       <td className="px-3 py-3 whitespace-nowrap">
         {!entry.verified &&
           !isImported &&
           !pendingSync &&
+          !syncFailed &&
           onToggleSelect && (
             <Checkbox
               checked={isSelected ?? false}
@@ -191,12 +240,64 @@ export function EntryRow({
       {createHourCell("PMI")}
       {createHourCell("LSI")}
       <td className="px-4 py-3 whitespace-nowrap text-sm">
-        {pendingSync ? (
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs">
-              <CloudOff className="h-3 w-3" />
-              Pending sync
-            </span>
+        {showPendingControls ? (
+          <div className="flex items-center gap-2 flex-wrap">
+            {syncFailed ? (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs"
+                title={syncFailed}
+              >
+                <AlertTriangle className="h-3 w-3" />
+                Sync failed
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs">
+                <CloudOff className="h-3 w-3" />
+                Pending sync
+              </span>
+            )}
+            {syncFailed && (
+              <Button
+                onClick={handleRetry}
+                size="sm"
+                variant="outline"
+                className="text-xs h-7 px-2"
+                disabled={!online}
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Retry
+              </Button>
+            )}
+            {onEdit && (
+              <Button
+                onClick={() => onEdit(entry)}
+                size="sm"
+                variant="ghost"
+                className="text-xs px-2"
+                aria-label="Edit entry"
+                title="Edit entry"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {syncFailed ? (
+              <Button
+                onClick={handleDiscard}
+                size="sm"
+                variant="ghost"
+                className="text-xs px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                aria-label="Discard failed entry"
+                title="Discard"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            ) : (
+              <DeleteEntryButton
+                entry={entry}
+                isPending={deleteMutation.isPending}
+                onConfirm={handleDelete}
+              />
+            )}
           </div>
         ) : isImported ? (
           <div className="flex items-center gap-2 flex-wrap">

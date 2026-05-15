@@ -3,7 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useOnlineStatus } from "@/lib/offline/online";
-import type { EntryDraft } from "@/lib/offline/mutations";
+import { nextTempId, type EntryDraft } from "@/lib/offline/mutations";
 import {
   Form,
   FormControl,
@@ -58,26 +58,25 @@ export function NewEntryForm() {
     name: "entries",
   });
 
-  const createMutation = useMutation<unknown, Error, EntryDraft[]>({
-    mutationKey: ["entries.batch"],
+  const createMutation = useMutation<
+    unknown,
+    Error,
+    { tempId: number; draft: EntryDraft }
+  >({
+    mutationKey: ["entries.create"],
   });
 
   const handleSubmit = (values: FormValues) => {
-    const drafts: EntryDraft[] = values.entries.map((e) => ({
-      date: e.date,
-      location: e.location,
-      method: e.method,
-      hours: Number(e.hours),
-    }));
-
-    createMutation.mutate(drafts, {
-      onError: (err) => {
-        toast({
-          title: "Could not save entries",
-          description: err.message,
-          variant: "destructive",
-        });
-      },
+    // Each row becomes its own create mutation so that an offline edit or
+    // delete on a still-pending row can coalesce 1:1 into the queued create.
+    values.entries.forEach((e) => {
+      const draft: EntryDraft = {
+        date: e.date,
+        location: e.location,
+        method: e.method,
+        hours: Number(e.hours),
+      };
+      createMutation.mutate({ tempId: nextTempId(), draft });
     });
 
     // Reset form + toast immediately — the optimistic cache update has
