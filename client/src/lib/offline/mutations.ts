@@ -3,6 +3,7 @@ import { apiRequest, queryClient, shouldRetryMutation } from "@/lib/queryClient"
 import type { Entry, RopeHours } from "@shared/schema";
 import {
   getDraft,
+  lowestOutboxTempId,
   patchDraft,
   putDraft,
   removeDraft,
@@ -28,8 +29,16 @@ export type RopeDraft = {
   hours: number;
 };
 
-let _tempCounter = -1;
+// Temp IDs must stay unique across reloads — otherwise a freshly assigned
+// "-1" could collide with an unsynced row already in the outbox / cache.
+// Initialize the counter just below the lowest tempId we know about.
+let _tempCounter = Math.min(-1, lowestOutboxTempId() - 1);
 export const nextTempId = () => _tempCounter--;
+/** Re-seed the counter from the outbox (used after the cache rehydrates). */
+export function reseedTempIds(extraMin = 0): void {
+  const fromOutbox = lowestOutboxTempId();
+  _tempCounter = Math.min(_tempCounter, fromOutbox - 1, extraMin - 1);
+}
 
 type WithSync<T> = T & {
   _pendingSync?: boolean;
@@ -110,6 +119,23 @@ function findCreateMutation(
     );
 }
 
+/** Walk the cache for the lowest temp id used by paused create mutations. */
+function lowestPendingTempId(qc: QueryClient): number {
+  let min = 0;
+  for (const m of qc.getMutationCache().getAll()) {
+    const k = m.options.mutationKey;
+    if (
+      Array.isArray(k) &&
+      (k[0] === "entries.create" || k[0] === "ropeHours.create")
+    ) {
+      const t = (m.state.variables as { tempId?: number } | undefined)
+        ?.tempId;
+      if (typeof t === "number" && t < min) min = t;
+    }
+  }
+  return min;
+}
+
 function setRowState<T extends { id: number }>(
   qc: QueryClient,
   key: readonly unknown[],
@@ -128,6 +154,11 @@ function setRowState<T extends { id: number }>(
 // =============================================================
 
 export function setupOfflineMutations(qc: QueryClient): void {
+  // After rehydrate the mutation cache may already contain creates with
+  // negative temp ids. Re-seed our counter so newly created rows can't
+  // collide with an unsynced one.
+  reseedTempIds(lowestPendingTempId(qc));
+
   // ----------------- entries.create (single, with tempId) ---------------
   qc.setMutationDefaults(["entries.create"], {
     networkMode: "offlineFirst",
@@ -193,23 +224,10 @@ export function setupOfflineMutations(qc: QueryClient): void {
       const prev = qc.getQueryData<Entry[]>([...ENTRIES_KEY]) ?? [];
 
       if (vars.id < 0) {
-        // Coalesce into the outbox + the queued create's variables.
+        // Coalesce into the outbox; the queued create's mutationFn reads
+        // getDraft() right before POSTing so the merged payload flows
+        // through without us needing to reach into Mutation internals.
         patchDraft("entries", vars.id, vars.patch);
-        const target = findCreateMutation(qc, "entries.create", vars.id);
-        if (target) {
-          const oldVars = target.state.variables as {
-            tempId: number;
-            draft: EntryDraft;
-          };
-          // setState is the public way to update a Mutation in v5.
-          target.setState({
-            ...target.state,
-            variables: {
-              tempId: oldVars.tempId,
-              draft: { ...oldVars.draft, ...vars.patch },
-            },
-          });
-        }
       }
 
       qc.setQueryData<Entry[]>([...ENTRIES_KEY], (cur) =>
@@ -346,20 +364,6 @@ export function setupOfflineMutations(qc: QueryClient): void {
 
       if (vars.id < 0) {
         patchDraft("rope", vars.id, vars.patch);
-        const target = findCreateMutation(qc, "ropeHours.create", vars.id);
-        if (target) {
-          const oldVars = target.state.variables as {
-            tempId: number;
-            draft: RopeDraft;
-          };
-          target.setState({
-            ...target.state,
-            variables: {
-              tempId: oldVars.tempId,
-              draft: { ...oldVars.draft, ...vars.patch },
-            },
-          });
-        }
       }
 
       qc.setQueryData<RopeHours[]>([...ROPE_KEY], (cur) =>
