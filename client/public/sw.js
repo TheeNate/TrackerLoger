@@ -1,30 +1,66 @@
 // Hand-rolled service worker for OJT Tracker.
-// - Pre-caches the navigation shell so the app can boot offline.
-// - Runtime caches built JS/CSS as they're fetched.
-// - Network-first for /api/* GETs with cache fallback so list pages
-//   continue to render the last-known data when offline.
-// - All non-GET requests bypass the cache and go straight to the network
-//   so the offline mutation queue (in IndexedDB) is the single source of
-//   truth for queued writes.
+//
+// Lifecycle:
+//   - The server stamps this file with a per-build version comment so the
+//     browser sees a byte-different sw.js after every deploy and triggers
+//     the standard install -> waiting -> SKIP_WAITING -> activate flow.
+//   - On install, we fetch "/" and parse the hashed asset URLs out of the
+//     served HTML, then precache the full app shell so offline relaunch
+//     works on the very next visit.
+//   - On fetch:
+//       * Navigations: network-first, fall back to the cached shell.
+//       * /api GETs: network-first with cache fallback so list pages
+//         continue to render the last-known data when offline.
+//       * Static assets: cache-first.
+//   - All non-GET requests bypass the cache; the offline mutation queue
+//     in IndexedDB is the single source of truth for queued writes.
 
-const VERSION = "v1";
+const VERSION = (self.__BUILD_VERSION__ || "dev");
 const SHELL_CACHE = `ojt-shell-${VERSION}`;
 const ASSET_CACHE = `ojt-assets-${VERSION}`;
 const API_CACHE = `ojt-api-${VERSION}`;
 
 const SHELL_URLS = ["/", "/index.html"];
 
+async function precacheShellAndAssets() {
+  const cache = await caches.open(SHELL_CACHE);
+  // Always cache the shell entries themselves.
+  await cache.addAll(SHELL_URLS).catch(() => {});
+
+  // Then fetch "/" and pull out the hashed asset URLs that the page needs
+  // so cold offline relaunch has the JS/CSS ready, not just the HTML.
+  try {
+    const res = await fetch("/", { cache: "no-cache" });
+    if (!res.ok) return;
+    const html = await res.text();
+    const urls = new Set();
+    const re = /(?:href|src)=["']([^"']+)["']/g;
+    let m;
+    while ((m = re.exec(html))) {
+      const u = m[1];
+      if (
+        u.startsWith("/assets/") ||
+        u === "/manifest.webmanifest" ||
+        /\.(?:js|css|woff2?|svg|png|ico)$/.test(u)
+      ) {
+        urls.add(u);
+      }
+    }
+    const assetCache = await caches.open(ASSET_CACHE);
+    await Promise.all(
+      Array.from(urls).map((u) =>
+        fetch(u, { cache: "no-cache" })
+          .then((r) => (r.ok ? assetCache.put(u, r.clone()) : null))
+          .catch(() => {}),
+      ),
+    );
+  } catch {
+    /* offline first install — runtime caching will fill in later */
+  }
+}
+
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches
-      .open(SHELL_CACHE)
-      .then((cache) =>
-        cache.addAll(SHELL_URLS).catch(() => {
-          // If the index can't be fetched (offline first run), ignore.
-        }),
-      )
-      .then(() => self.skipWaiting()),
-  );
+  event.waitUntil(precacheShellAndAssets());
 });
 
 self.addEventListener("activate", (event) => {
@@ -63,16 +99,11 @@ function isAsset(url) {
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-
-  // Only handle same-origin GETs.
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
-
-  // Never intercept Vite dev/HMR requests.
   if (url.pathname.startsWith("/@") || url.pathname.includes("?v=")) return;
 
-  // Navigation requests: network-first, fall back to cached shell.
   if (req.mode === "navigate") {
     event.respondWith(
       (async () => {
@@ -98,7 +129,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // API GETs: network-first with cache fallback.
   if (isApiRequest(url)) {
     event.respondWith(
       (async () => {
@@ -125,7 +155,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static assets: cache-first.
   if (isAsset(url)) {
     event.respondWith(
       (async () => {

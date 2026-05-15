@@ -12,9 +12,15 @@ async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
     if (res.status === 401 && typeof window !== "undefined") {
-      // Session expired or never existed — bounce to re-auth so the user
-      // can log in again. Queued mutations stay paused until the next
-      // successful login (resumePausedMutations runs on rehydrate).
+      // Session expired or never existed — pause the offline mutation queue
+      // and bounce to re-auth. Queued writes resume after the user logs in
+      // again (see resumeAfterAuth in the auth hook).
+      try {
+        const { pauseForAuth } = await import("@/lib/offline/online");
+        pauseForAuth();
+      } catch {
+        /* ignore */
+      }
       const here = window.location.pathname;
       if (!here.startsWith("/auth") && here !== "/") {
         window.location.assign("/auth");

@@ -46,8 +46,12 @@ function useLoginMutation() {
       }
       return await res.json();
     },
-    onSuccess: (user: User) => {
+    onSuccess: async (user: User) => {
       queryClient.setQueryData(["/api/user"], user);
+      // Drain anything that was paused while the user was logged out.
+      const { resumeAfterAuth } = await import("@/lib/offline/online");
+      resumeAfterAuth();
+      queryClient.resumePausedMutations().catch(() => {});
       toast({
         title: "Login successful",
         description: `Welcome back, ${user.name || user.email}!`,
