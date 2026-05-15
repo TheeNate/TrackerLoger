@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, shouldRetryMutation } from "@/lib/queryClient";
 import type { Entry, RopeHours } from "@shared/schema";
 import {
   getDraft,
@@ -7,6 +7,11 @@ import {
   putDraft,
   removeDraft,
 } from "./outbox";
+
+// Exponential backoff (1s, 2s, 4s …) capped at 30s so transient 5xx /
+// network blips don't immediately surface as "Sync failed".
+const retryDelay = (attempt: number) =>
+  Math.min(30_000, 1_000 * 2 ** attempt);
 
 export type EntryDraft = {
   date: string;
@@ -31,6 +36,7 @@ type WithSync<T> = T & {
   _syncFailed?: string | null;
   _failedKind?: "create" | "update" | "delete";
   _failedDraft?: EntryDraft | RopeDraft;
+  _failedPatch?: Partial<EntryDraft> | Partial<RopeDraft>;
 };
 
 const ENTRIES_KEY = ["/api/entries"] as const;
@@ -125,6 +131,8 @@ export function setupOfflineMutations(qc: QueryClient): void {
   // ----------------- entries.create (single, with tempId) ---------------
   qc.setMutationDefaults(["entries.create"], {
     networkMode: "offlineFirst",
+    retry: shouldRetryMutation,
+    retryDelay,
     mutationFn: async (vars: { tempId: number; draft: EntryDraft }) => {
       // Use the *latest* coalesced draft from the outbox so any offline
       // edits made before the create syncs are included.
@@ -166,6 +174,8 @@ export function setupOfflineMutations(qc: QueryClient): void {
   qc.setMutationDefaults(["entries.update"], {
     networkMode: "offlineFirst",
     scope: { id: "entries.update" }, // serialize replays in order
+    retry: shouldRetryMutation,
+    retryDelay,
     mutationFn: async (vars: {
       id: number;
       patch: Partial<EntryDraft>;
@@ -224,6 +234,7 @@ export function setupOfflineMutations(qc: QueryClient): void {
         _pendingSync: false,
         _syncFailed: err.message || "Sync failed",
         _failedKind: "update",
+        _failedPatch: vars.patch,
       });
     },
     onSuccess: (_data, vars) => {
@@ -245,6 +256,8 @@ export function setupOfflineMutations(qc: QueryClient): void {
   qc.setMutationDefaults(["entries.delete"], {
     networkMode: "offlineFirst",
     scope: { id: "entries.delete" },
+    retry: shouldRetryMutation,
+    retryDelay,
     mutationFn: async (id: number) => {
       if (id < 0) return id; // coalesced — nothing on the server to delete
       await apiRequest("DELETE", `/api/entries/${id}`);
@@ -278,6 +291,8 @@ export function setupOfflineMutations(qc: QueryClient): void {
   // ----------------- ropeHours.create -----------------
   qc.setMutationDefaults(["ropeHours.create"], {
     networkMode: "offlineFirst",
+    retry: shouldRetryMutation,
+    retryDelay,
     mutationFn: async (vars: { tempId: number; draft: RopeDraft }) => {
       const latest = getDraft("rope", vars.tempId) ?? vars.draft;
       const res = await apiRequest("POST", "/api/rope-hours", latest);
@@ -314,6 +329,8 @@ export function setupOfflineMutations(qc: QueryClient): void {
   qc.setMutationDefaults(["ropeHours.update"], {
     networkMode: "offlineFirst",
     scope: { id: "ropeHours.update" },
+    retry: shouldRetryMutation,
+    retryDelay,
     mutationFn: async (vars: { id: number; patch: Partial<RopeDraft> }) => {
       if (vars.id < 0) return null;
       const res = await apiRequest(
@@ -374,6 +391,7 @@ export function setupOfflineMutations(qc: QueryClient): void {
         _pendingSync: false,
         _syncFailed: err.message || "Sync failed",
         _failedKind: "update",
+        _failedPatch: vars.patch,
       });
     },
     onSuccess: (_data, vars) => {
@@ -393,6 +411,8 @@ export function setupOfflineMutations(qc: QueryClient): void {
   qc.setMutationDefaults(["ropeHours.delete"], {
     networkMode: "offlineFirst",
     scope: { id: "ropeHours.delete" },
+    retry: shouldRetryMutation,
+    retryDelay,
     mutationFn: async (id: number) => {
       if (id < 0) return id;
       await apiRequest("DELETE", `/api/rope-hours/${id}`);
@@ -438,60 +458,116 @@ export function getSyncFailure(row: {
   return row._syncFailed ?? null;
 }
 
-/** Retry a failed create. Re-runs the create mutation with the latest draft. */
+/**
+ * Retry a failed mutation. Handles all three kinds:
+ *  - create: re-run the create mutation with the latest draft.
+ *  - update: re-run the update mutation with the saved patch.
+ *  - delete: re-run the delete mutation.
+ */
 export function retryFailedEntry(row: Entry): void {
   const r = row as WithSync<Entry>;
   if (!r._syncFailed) return;
-  if (r._failedKind === "create") {
-    const draft =
-      (r._failedDraft as EntryDraft) ??
-      ({
-        date: new Date(r.date).toISOString().split("T")[0],
-        location: r.location,
-        method: r.method,
-        hours: r.hours,
-      } as EntryDraft);
-    queryClient
-      .getMutationCache()
-      .build(queryClient, {
-        mutationKey: ["entries.create"],
-      })
-      .execute({ tempId: r.id, draft });
+  const cache = queryClient.getMutationCache();
+  if (r._failedKind === "update") {
+    const patch = (r._failedPatch as Partial<EntryDraft>) ?? {};
+    cache
+      .build(queryClient, { mutationKey: ["entries.update"] })
+      .execute({ id: r.id, patch });
+    return;
   }
+  if (r._failedKind === "delete") {
+    cache
+      .build(queryClient, { mutationKey: ["entries.delete"] })
+      .execute(r.id);
+    return;
+  }
+  // create (default)
+  const draft =
+    (r._failedDraft as EntryDraft) ??
+    ({
+      date: new Date(r.date).toISOString().split("T")[0],
+      location: r.location,
+      method: r.method,
+      hours: r.hours,
+    } as EntryDraft);
+  cache
+    .build(queryClient, { mutationKey: ["entries.create"] })
+    .execute({ tempId: r.id, draft });
 }
 
+/**
+ * Discard a failed mutation.
+ *  - For a failed *create*, drop the row entirely (it never made it to the
+ *    server) and clear the outbox draft.
+ *  - For a failed *update* or *delete*, the canonical row still exists on
+ *    the server, so just clear the failure flag and refetch from the
+ *    server to restore the authoritative state.
+ */
 export function discardFailedEntry(row: Entry): void {
-  removeDraft("entries", row.id);
-  queryClient.setQueryData<Entry[]>(["/api/entries"], (cur) =>
-    (cur ?? []).filter((e) => e.id !== row.id),
-  );
+  const r = row as WithSync<Entry>;
+  if (r._failedKind === "create") {
+    removeDraft("entries", row.id);
+    queryClient.setQueryData<Entry[]>(["/api/entries"], (cur) =>
+      (cur ?? []).filter((e) => e.id !== row.id),
+    );
+    return;
+  }
+  setRowState<Entry>(queryClient, ENTRIES_KEY, row.id, {
+    _pendingSync: false,
+    _syncFailed: null,
+    _failedKind: undefined,
+    _failedDraft: undefined,
+    _failedPatch: undefined,
+  });
+  queryClient.invalidateQueries({ queryKey: ENTRIES_KEY });
 }
 
 export function retryFailedRope(row: RopeHours): void {
   const r = row as WithSync<RopeHours>;
   if (!r._syncFailed) return;
-  if (r._failedKind === "create") {
-    const draft =
-      (r._failedDraft as RopeDraft) ??
-      ({
-        startDate: new Date(r.startDate).toISOString().split("T")[0],
-        endDate: new Date(r.endDate).toISOString().split("T")[0],
-        location: r.location,
-        skills: r.skills,
-        hours: r.hours,
-      } as RopeDraft);
-    queryClient
-      .getMutationCache()
-      .build(queryClient, {
-        mutationKey: ["ropeHours.create"],
-      })
-      .execute({ tempId: r.id, draft });
+  const cache = queryClient.getMutationCache();
+  if (r._failedKind === "update") {
+    const patch = (r._failedPatch as Partial<RopeDraft>) ?? {};
+    cache
+      .build(queryClient, { mutationKey: ["ropeHours.update"] })
+      .execute({ id: r.id, patch });
+    return;
   }
+  if (r._failedKind === "delete") {
+    cache
+      .build(queryClient, { mutationKey: ["ropeHours.delete"] })
+      .execute(r.id);
+    return;
+  }
+  const draft =
+    (r._failedDraft as RopeDraft) ??
+    ({
+      startDate: new Date(r.startDate).toISOString().split("T")[0],
+      endDate: new Date(r.endDate).toISOString().split("T")[0],
+      location: r.location,
+      skills: r.skills,
+      hours: r.hours,
+    } as RopeDraft);
+  cache
+    .build(queryClient, { mutationKey: ["ropeHours.create"] })
+    .execute({ tempId: r.id, draft });
 }
 
 export function discardFailedRope(row: RopeHours): void {
-  removeDraft("rope", row.id);
-  queryClient.setQueryData<RopeHours[]>(["/api/rope-hours"], (cur) =>
-    (cur ?? []).filter((e) => e.id !== row.id),
-  );
+  const r = row as WithSync<RopeHours>;
+  if (r._failedKind === "create") {
+    removeDraft("rope", row.id);
+    queryClient.setQueryData<RopeHours[]>(["/api/rope-hours"], (cur) =>
+      (cur ?? []).filter((e) => e.id !== row.id),
+    );
+    return;
+  }
+  setRowState<RopeHours>(queryClient, ROPE_KEY, row.id, {
+    _pendingSync: false,
+    _syncFailed: null,
+    _failedKind: undefined,
+    _failedDraft: undefined,
+    _failedPatch: undefined,
+  });
+  queryClient.invalidateQueries({ queryKey: ROPE_KEY });
 }

@@ -12,6 +12,7 @@ import { ImportLogDialog } from "@/components/ImportLogDialog";
 import { Button } from "@/components/ui/button";
 import { Upload } from "lucide-react";
 import { Entry, User } from "@shared/schema";
+import { useOnlineStatus } from "@/lib/offline/online";
 
 export default function ProfilePage() {
   const { toast } = useToast();
@@ -22,6 +23,19 @@ export default function ProfilePage() {
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const online = useOnlineStatus();
+  const handleOpenImport = () => {
+    if (!online) {
+      toast({
+        title: "Requires internet",
+        description:
+          "Connect to the internet to import a signed log. The OCR scan needs the server.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsImportDialogOpen(true);
+  };
 
   const { data: user, isLoading: isLoadingUser } = useQuery<User>({
     queryKey: ["/api/user"]
@@ -85,7 +99,9 @@ export default function ProfilePage() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => setIsImportDialogOpen(true)}
+            onClick={handleOpenImport}
+            disabled={!online}
+            title={online ? "Import a signed log PDF" : "Requires internet"}
           >
             <Upload className="h-4 w-4 mr-2" />
             Import from signed log

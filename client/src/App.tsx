@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { createIDBPersister } from "@/lib/offline";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
+import { useAuth } from "@/hooks/use-auth";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/AuthPage";
 import ProfilePage from "@/pages/ProfilePage";
@@ -80,11 +81,23 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <Router />
-          <InstallPrompt />
-          <UpdatePrompt />
+          <AuthedPrompts />
         </TooltipProvider>
       </AuthProvider>
     </PersistQueryClientProvider>
+  );
+}
+
+// Only show the install prompt after the user has signed in — we don't
+// want it appearing on the auth screen for visitors. The update toast
+// is fine to show anywhere.
+function AuthedPrompts() {
+  const { user } = useAuth();
+  return (
+    <>
+      {user ? <InstallPrompt /> : null}
+      <UpdatePrompt />
+    </>
   );
 }
 
