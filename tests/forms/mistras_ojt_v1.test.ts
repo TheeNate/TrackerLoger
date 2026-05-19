@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { Entry, User } from "@shared/schema";
 import { mistrasAdapter } from "../../server/forms/adapters/mistras_ojt_v1";
+import { FormCapacityError, EmptyExportError, NothingToExportError } from "../../server/forms/types";
 
 function makeProfile(overrides: Partial<User> = {}): User {
   return {
@@ -86,5 +87,62 @@ describe("mistrasAdapter — core mapping", () => {
     });
     expect(out.employee_signature).toBe("J. Tech (signed)");
     expect(out.employee_name).toBe("Jane Tech"); // unchanged
+  });
+});
+
+describe("mistrasAdapter — bounds and unmapped methods", () => {
+  it("throws EmptyExportError on zero entries", () => {
+    expect(() => mistrasAdapter({ entries: [], profile: makeProfile() }))
+      .toThrow(EmptyExportError);
+  });
+
+  it("throws FormCapacityError on more than 16 entries", () => {
+    const entries = Array.from({ length: 17 }, (_, i) =>
+      makeEntry({ id: i + 1, date: new Date(`2026-05-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`) }));
+    expect(() => mistrasAdapter({ entries, profile: makeProfile() }))
+      .toThrowError(expect.objectContaining({
+        name: "FormCapacityError",
+        max: 16,
+        got: 17,
+        unit: "rows",
+      }));
+  });
+
+  it("throws NothingToExportError when every entry is unmapped", () => {
+    expect(() => mistrasAdapter({
+      entries: [
+        makeEntry({ method: "PMI" }),
+        makeEntry({ method: "VT_1" }),
+        makeEntry({ method: "UT" }),
+      ],
+      profile: makeProfile(),
+    })).toThrow(NothingToExportError);
+  });
+
+  it("keeps the row (date+location+supervisor) when method is unmapped", () => {
+    const out = mistrasAdapter({
+      entries: [
+        makeEntry({ id: 1, method: "MT", hours: 2 }),
+        makeEntry({ id: 2, method: "PMI", hours: 3, location: "Plant Z" }),
+      ],
+      profile: makeProfile(),
+    });
+    expect(out.row_2_date).toBeDefined();
+    expect(out.row_2_location).toBe("Plant Z");
+    expect(out.row_2_PMI).toBeUndefined();
+    expect(out.total_PMI).toBeUndefined();
+  });
+
+  it("sums hours by column across rows for totals", () => {
+    const out = mistrasAdapter({
+      entries: [
+        makeEntry({ id: 1, method: "MT", hours: 2 }),
+        makeEntry({ id: 2, method: "MT", hours: 3 }),
+        makeEntry({ id: 3, method: "PT", hours: 1.5 }),
+      ],
+      profile: makeProfile(),
+    });
+    expect(out.total_MT).toBe("5");
+    expect(out.total_PT).toBe("1.5");
   });
 });

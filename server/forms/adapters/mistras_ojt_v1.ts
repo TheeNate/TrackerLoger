@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import type { Adapter, FieldValues } from "../types";
+import { EmptyExportError, FormCapacityError, NothingToExportError } from "../types";
 
 // Per-form method map. Identity for everything that has the same name on the
 // MISTRAS form; UT_THK is renamed to UT_thk. Methods absent here have no
@@ -20,14 +21,19 @@ function formatUtcDate(d: Date): string {
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${d.getUTCFullYear()}`;
 }
 
-export const mistrasAdapter: Adapter = ({ entries, profile, headerOverrides }) => {
-  const out: FieldValues = {};
+const MAX_ROWS = 16;
 
-  // Sort entries by date ascending. Defensive — caller is expected to do this.
+export const mistrasAdapter: Adapter = ({ entries, profile, headerOverrides }) => {
+  if (entries.length === 0) throw new EmptyExportError();
+  if (entries.length > MAX_ROWS) {
+    throw new FormCapacityError(MAX_ROWS, entries.length, "rows");
+  }
+
+  const out: FieldValues = {};
   const sorted = [...entries].sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  // Per-column totals
   const totals: Record<string, number> = {};
+  let anyMethodCellWritten = false;
 
   sorted.forEach((entry, i) => {
     const rowNum = i + 1;
@@ -39,15 +45,17 @@ export const mistrasAdapter: Adapter = ({ entries, profile, headerOverrides }) =
     if (mappedCol) {
       out[`row_${rowNum}_${mappedCol}`] = String(entry.hours);
       totals[mappedCol] = (totals[mappedCol] ?? 0) + entry.hours;
+      anyMethodCellWritten = true;
     }
   });
+
+  if (!anyMethodCellWritten) throw new NothingToExportError();
 
   for (const [col, sum] of Object.entries(totals)) {
     if (sum > 0) out[`total_${col}`] = String(sum);
   }
 
-  // Header — profile defaults, then headerOverrides
-  const today = format(new Date(), "M/d/yyyy");
+  const today = formatUtcDate(new Date());
   const headerDefaults: FieldValues = {
     employee_name: profile.name ?? "",
     employee_number: profile.employeeNumber ?? "",
