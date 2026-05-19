@@ -68,7 +68,10 @@ async function runMigrations() {
         ADD COLUMN IF NOT EXISTS employee_id_used TEXT,
         ADD COLUMN IF NOT EXISTS source_document_key TEXT,
         ADD COLUMN IF NOT EXISTS source_document_name TEXT,
-        ADD COLUMN IF NOT EXISTS imported_at TIMESTAMP;
+        ADD COLUMN IF NOT EXISTS imported_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS employer TEXT,
+        ADD COLUMN IF NOT EXISTS work_details TEXT,
+        ADD COLUMN IF NOT EXISTS max_height TEXT;
     `);
     await client.query(`
       ALTER TABLE supervisors

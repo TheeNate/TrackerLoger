@@ -96,6 +96,9 @@ export const ropeHours = pgTable("rope_hours", {
   location: text("location").notNull(),
   skills: text("skills").notNull(), // Text input for skills used
   hours: real("hours").notNull(),
+  employer: text("employer"),
+  workDetails: text("work_details"),
+  maxHeight: text("max_height"),
   verified: boolean("verified").default(false),
   verifiedBy: text("verified_by"),
   verificationToken: uuid("verification_token").unique(),
@@ -124,6 +127,9 @@ export const insertRopeHoursSchema = createInsertSchema(ropeHours).pick({
   location: true,
   skills: true,
   hours: true,
+  employer: true,
+  workDetails: true,
+  maxHeight: true,
 });
 
 // User Crypto Identities - for technicians
