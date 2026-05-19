@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
+import path from "path";
+import { PDFDocument } from "pdf-lib";
 import type { Entry, User } from "@shared/schema";
 import { cwAdapter } from "../../server/forms/adapters/curtiss_wright_wer_v1";
 import { EmptyExportError, FormCapacityError, NothingToExportError } from "../../server/forms/types";
+import { fillForm } from "../../server/forms/filler";
 
 function makeProfile(overrides: Partial<User> = {}): User {
   return {
@@ -166,5 +169,35 @@ describe("cwAdapter — bounds and unmapped methods", () => {
     expect(out.week2_ending).toBeUndefined();
     expect(out.week2_monday_MT).toBeUndefined();
     expect(out.week2_total_TOTAL).toBeUndefined();
+  });
+});
+
+const CW_BLANK = path.resolve(
+  __dirname, "..", "..", "server", "forms", "blanks", "CurtissWright_WorkExperience_Fillable.pdf",
+);
+
+describe("cwAdapter — round-trip through filler", () => {
+  it("every field the adapter writes reads back identical from the filled PDF", async () => {
+    const profile = makeProfile({ name: "Round Trip" });
+    const entries = [
+      // Week ending 5/9 (UTC dates — Monday=5/4, Tuesday=5/5, Wednesday=5/6)
+      makeEntry({ id: 1, date: new Date("2026-05-04T00:00:00Z"), method: "MT",     hours: 2 }),
+      makeEntry({ id: 2, date: new Date("2026-05-05T00:00:00Z"), method: "UT_THK", hours: 3 }),  // → UTT
+      makeEntry({ id: 3, date: new Date("2026-05-06T00:00:00Z"), method: "VT_2",   hours: 1 }),
+      // Week ending 5/16
+      makeEntry({ id: 4, date: new Date("2026-05-11T00:00:00Z"), method: "PT",     hours: 4 }),
+      makeEntry({ id: 5, date: new Date("2026-05-13T00:00:00Z"), method: "VWE",    hours: 2 }),
+    ];
+
+    const expected = cwAdapter({ entries, profile, headerOverrides: { job_number: "JOB-42" } });
+    const bytes = await fillForm(CW_BLANK, expected);
+
+    const reopened = await PDFDocument.load(bytes);
+    const form = reopened.getForm();
+
+    for (const [name, value] of Object.entries(expected)) {
+      const got = form.getTextField(name).getText() ?? "";
+      expect(got, `field ${name}`).toBe(value);
+    }
   });
 });
