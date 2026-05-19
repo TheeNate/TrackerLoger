@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { Entry, User } from "@shared/schema";
 import { cwAdapter } from "../../server/forms/adapters/curtiss_wright_wer_v1";
+import { EmptyExportError, FormCapacityError, NothingToExportError } from "../../server/forms/types";
 
 function makeProfile(overrides: Partial<User> = {}): User {
   return {
@@ -111,5 +112,59 @@ describe("cwAdapter — week bucketing", () => {
     });
     expect(out.name).toBe("Override Tech");
     expect(out.job_number).toBe("JOB-99");
+  });
+});
+
+describe("cwAdapter — bounds and unmapped methods", () => {
+  it("throws EmptyExportError on zero entries", () => {
+    expect(() => cwAdapter({ entries: [], profile: makeProfile() }))
+      .toThrow(EmptyExportError);
+  });
+
+  it("throws FormCapacityError when entries span 3 calendar weeks", () => {
+    const entries = [
+      makeEntry({ id: 1, date: new Date("2026-05-04T00:00:00Z") }),  // week 1
+      makeEntry({ id: 2, date: new Date("2026-05-11T00:00:00Z") }),  // week 2
+      makeEntry({ id: 3, date: new Date("2026-05-18T00:00:00Z") }),  // week 3
+    ];
+    expect(() => cwAdapter({ entries, profile: makeProfile() }))
+      .toThrowError(expect.objectContaining({
+        name: "FormCapacityError",
+        max: 2, got: 3, unit: "weeks",
+      }));
+  });
+
+  it("throws NothingToExportError when every entry uses an unsupported method", () => {
+    expect(() => cwAdapter({
+      entries: [
+        makeEntry({ method: "ET" }),
+        makeEntry({ method: "PMI" }),
+        makeEntry({ method: "UT" }),
+      ],
+      profile: makeProfile(),
+    })).toThrow(NothingToExportError);
+  });
+
+  it("skips unmapped methods silently when at least one mapped entry exists", () => {
+    const out = cwAdapter({
+      entries: [
+        makeEntry({ id: 1, method: "MT",  hours: 2 }),
+        makeEntry({ id: 2, method: "PMI", hours: 5 }), // unmapped — should be ignored
+      ],
+      profile: makeProfile(),
+    });
+    expect(out.week1_monday_MT).toBe("2");
+    expect(out.week1_total_MT).toBe("2");
+    expect(out.week1_total_TOTAL).toBe("2"); // PMI hours not included
+  });
+
+  it("leaves week2 fields entirely absent when only one week of entries", () => {
+    const out = cwAdapter({
+      entries: [makeEntry({ id: 1, method: "MT", hours: 2 })],
+      profile: makeProfile(),
+    });
+    expect(out.week2_ending).toBeUndefined();
+    expect(out.week2_monday_MT).toBeUndefined();
+    expect(out.week2_total_TOTAL).toBeUndefined();
   });
 });
