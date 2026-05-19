@@ -606,7 +606,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Export OJT entries into a vendor PDF form
+  // Export OJT or rope-hours entries into a vendor PDF form
   app.post("/api/export-form", requireAuth, async (req, res) => {
     const userId = req.session.userId!;
     const { form_id, entry_ids, header_overrides } = req.body ?? {};
@@ -628,30 +628,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     const requestedIds = new Set<number>(entry_ids);
-    const userEntries = await storage.getEntries(userId);
-    const selected = userEntries.filter((e) => requestedIds.has(e.id));
-
-    if (selected.length !== requestedIds.size) {
-      return res.status(403).json({
-        message: "One or more entry_ids are not accessible",
-        code: "entry_not_found",
-      });
-    }
-
     const profile = await storage.getUser(userId);
     if (!profile) {
       return res.status(401).json({ message: "Profile not found", code: "unauthorized" });
     }
 
-    const { blankPath, adapter } = registry[form_id];
+    const entryDef = registry[form_id];
 
     let fieldValues;
+    let earliestMs: number, latestMs: number;
     try {
-      fieldValues = adapter({
-        entries: selected,
-        profile,
-        headerOverrides: header_overrides,
-      });
+      if (entryDef.kind === "ojt") {
+        const userEntries = await storage.getEntries(userId);
+        const selected = userEntries.filter((e) => requestedIds.has(e.id));
+        if (selected.length !== requestedIds.size) {
+          return res.status(403).json({
+            message: "One or more entry_ids are not accessible",
+            code: "entry_not_found",
+          });
+        }
+        fieldValues = entryDef.adapter({
+          entries: selected,
+          profile,
+          headerOverrides: header_overrides,
+        });
+        const dates = selected.map((e) => e.date.getTime()).sort();
+        earliestMs = dates[0];
+        latestMs = dates[dates.length - 1];
+      } else {
+        const userRope = await storage.getRopeHours(userId);
+        const selected = userRope.filter((r) => requestedIds.has(r.id));
+        if (selected.length !== requestedIds.size) {
+          return res.status(403).json({
+            message: "One or more entry_ids are not accessible",
+            code: "entry_not_found",
+          });
+        }
+        const supervisors = await storage.getSupervisors(userId);
+        fieldValues = entryDef.adapter({
+          ropeHours: selected,
+          profile,
+          supervisors,
+          headerOverrides: header_overrides,
+        });
+        const dates = selected.map((r) => r.startDate.getTime()).sort();
+        earliestMs = dates[0];
+        latestMs = dates[dates.length - 1];
+      }
     } catch (err) {
       if (err instanceof FormCapacityError) {
         return res.status(422).json({
@@ -672,15 +695,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     let bytes;
     try {
-      bytes = await fillForm(blankPath, fieldValues);
+      bytes = await fillForm(entryDef.blankPath, fieldValues);
     } catch (err) {
       console.error(`fillForm failed for ${form_id}:`, err);
       return res.status(500).json({ message: "Form fill failed", code: "internal_error" });
     }
 
-    const dates = selected.map((e) => e.date.getTime()).sort();
-    const earliest = new Date(dates[0]).toISOString().slice(0, 10);
-    const latest = new Date(dates[dates.length - 1]).toISOString().slice(0, 10);
+    const earliest = new Date(earliestMs).toISOString().slice(0, 10);
+    const latest = new Date(latestMs).toISOString().slice(0, 10);
     const filename = `${form_id}_${earliest}_to_${latest}.pdf`;
 
     res.setHeader("Content-Type", "application/pdf");
