@@ -1,0 +1,83 @@
+{
+  "form_id": "mistras_ojt_v1",
+  "company": "MISTRAS Group Inc.",
+  "form_title": "Experience Hours (OJT)",
+  "form_revision": "100-FORM-95 Rev 0",
+  "blank_pdf": "MISTRAS_OJT_Fillable.pdf",
+  "page_count": 1,
+  "method_codes": ["ET", "RFT", "MT", "PT", "RT", "UT_thk", "UTSW", "PAUT", "LSI"],
+  "method_code_labels": {
+    "ET": "Eddy Current Testing",
+    "RFT": "Remote Field Testing",
+    "MT": "Magnetic Particle Testing",
+    "PT": "Penetrant Testing (Liquid Penetrant)",
+    "RT": "Radiographic Testing",
+    "UT_thk": "Ultrasonic Thickness",
+    "UTSW": "Ultrasonic Shear Wave",
+    "PAUT": "Phased Array Ultrasonic Testing",
+    "LSI": "Leak / Seal Integrity (verify w/ company)"
+  },
+  "max_entry_rows": 16,
+  "fields": {
+    "header": {
+      "employee_name":   { "pdf_field": "employee_name",   "type": "text", "label": "Employee Name (Print)" },
+      "employee_number": { "pdf_field": "employee_number", "type": "text", "label": "MISTRAS Employee Number" }
+    },
+    "rows_template": {
+      "description": "There are 16 rows. PDF field names follow: row_<N>_<key> where N is 1..16.",
+      "keys": {
+        "date":       { "label": "Job Date",          "format": "M/D/YYYY" },
+        "location":   { "label": "Job Location",      "format": "free text" },
+        "ET":         { "label": "ET hours",          "format": "decimal hours" },
+        "RFT":        { "label": "RFT hours",         "format": "decimal hours" },
+        "MT":         { "label": "MT hours",          "format": "decimal hours" },
+        "PT":         { "label": "PT hours",          "format": "decimal hours" },
+        "RT":         { "label": "RT hours",          "format": "decimal hours" },
+        "UT_thk":     { "label": "UT Thickness hours","format": "decimal hours" },
+        "UTSW":       { "label": "UTSW hours",        "format": "decimal hours" },
+        "PAUT":       { "label": "PAUT hours",        "format": "decimal hours" },
+        "LSI":        { "label": "LSI hours",         "format": "decimal hours" },
+        "supervisor": { "label": "Supervisor Signature (typed)", "format": "free text / initials" }
+      }
+    },
+    "totals": {
+      "description": "Total Hours row at bottom of table. PDF field names: total_<methodCode>.",
+      "fields": {
+        "total_ET":     { "pdf_field": "total_ET",     "type": "text" },
+        "total_RFT":    { "pdf_field": "total_RFT",    "type": "text" },
+        "total_MT":     { "pdf_field": "total_MT",     "type": "text" },
+        "total_PT":     { "pdf_field": "total_PT",     "type": "text" },
+        "total_RT":     { "pdf_field": "total_RT",     "type": "text" },
+        "total_UT_thk": { "pdf_field": "total_UT_thk", "type": "text" },
+        "total_UTSW":   { "pdf_field": "total_UTSW",   "type": "text" },
+        "total_PAUT":   { "pdf_field": "total_PAUT",   "type": "text" },
+        "total_LSI":    { "pdf_field": "total_LSI",    "type": "text" }
+      }
+    },
+    "signature": {
+      "employee_signature": { "pdf_field": "employee_signature", "type": "text", "label": "Employee Signature" },
+      "signature_date":     { "pdf_field": "signature_date",     "type": "text", "label": "Signature Date" }
+    }
+  },
+  "all_pdf_field_names": [
+    "employee_name", "employee_number",
+    "row_1_date", "row_1_location", "row_1_ET", "row_1_RFT", "row_1_MT", "row_1_PT", "row_1_RT", "row_1_UT_thk", "row_1_UTSW", "row_1_PAUT", "row_1_LSI", "row_1_supervisor",
+    "row_2_date", "row_2_location", "row_2_ET", "row_2_RFT", "row_2_MT", "row_2_PT", "row_2_RT", "row_2_UT_thk", "row_2_UTSW", "row_2_PAUT", "row_2_LSI", "row_2_supervisor",
+    "row_3_date", "row_3_location", "row_3_ET", "row_3_RFT", "row_3_MT", "row_3_PT", "row_3_RT", "row_3_UT_thk", "row_3_UTSW", "row_3_PAUT", "row_3_LSI", "row_3_supervisor",
+    "row_4_date", "row_4_location", "row_4_ET", "row_4_RFT", "row_4_MT", "row_4_PT", "row_4_RT", "row_4_UT_thk", "row_4_UTSW", "row_4_PAUT", "row_4_LSI", "row_4_supervisor",
+    "row_5_date", "row_5_location", "row_5_ET", "row_5_RFT", "row_5_MT", "row_5_PT", "row_5_RT", "row_5_UT_thk", "row_5_UTSW", "row_5_PAUT", "row_5_LSI", "row_5_supervisor",
+    "row_6_date", "row_6_location", "row_6_ET", "row_6_RFT", "row_6_MT", "row_6_PT", "row_6_RT", "row_6_UT_thk", "row_6_UTSW", "row_6_PAUT", "row_6_LSI", "row_6_supervisor",
+    "row_7_date", "row_7_location", "row_7_ET", "row_7_RFT", "row_7_MT", "row_7_PT", "row_7_RT", "row_7_UT_thk", "row_7_UTSW", "row_7_PAUT", "row_7_LSI", "row_7_supervisor",
+    "row_8_date", "row_8_location", "row_8_ET", "row_8_RFT", "row_8_MT", "row_8_PT", "row_8_RT", "row_8_UT_thk", "row_8_UTSW", "row_8_PAUT", "row_8_LSI", "row_8_supervisor",
+    "row_9_date", "row_9_location", "row_9_ET", "row_9_RFT", "row_9_MT", "row_9_PT", "row_9_RT", "row_9_UT_thk", "row_9_UTSW", "row_9_PAUT", "row_9_LSI", "row_9_supervisor",
+    "row_10_date", "row_10_location", "row_10_ET", "row_10_RFT", "row_10_MT", "row_10_PT", "row_10_RT", "row_10_UT_thk", "row_10_UTSW", "row_10_PAUT", "row_10_LSI", "row_10_supervisor",
+    "row_11_date", "row_11_location", "row_11_ET", "row_11_RFT", "row_11_MT", "row_11_PT", "row_11_RT", "row_11_UT_thk", "row_11_UTSW", "row_11_PAUT", "row_11_LSI", "row_11_supervisor",
+    "row_12_date", "row_12_location", "row_12_ET", "row_12_RFT", "row_12_MT", "row_12_PT", "row_12_RT", "row_12_UT_thk", "row_12_UTSW", "row_12_PAUT", "row_12_LSI", "row_12_supervisor",
+    "row_13_date", "row_13_location", "row_13_ET", "row_13_RFT", "row_13_MT", "row_13_PT", "row_13_RT", "row_13_UT_thk", "row_13_UTSW", "row_13_PAUT", "row_13_LSI", "row_13_supervisor",
+    "row_14_date", "row_14_location", "row_14_ET", "row_14_RFT", "row_14_MT", "row_14_PT", "row_14_RT", "row_14_UT_thk", "row_14_UTSW", "row_14_PAUT", "row_14_LSI", "row_14_supervisor",
+    "row_15_date", "row_15_location", "row_15_ET", "row_15_RFT", "row_15_MT", "row_15_PT", "row_15_RT", "row_15_UT_thk", "row_15_UTSW", "row_15_PAUT", "row_15_LSI", "row_15_supervisor",
+    "row_16_date", "row_16_location", "row_16_ET", "row_16_RFT", "row_16_MT", "row_16_PT", "row_16_RT", "row_16_UT_thk", "row_16_UTSW", "row_16_PAUT", "row_16_LSI", "row_16_supervisor",
+    "total_ET", "total_RFT", "total_MT", "total_PT", "total_RT", "total_UT_thk", "total_UTSW", "total_PAUT", "total_LSI",
+    "employee_signature", "signature_date"
+  ]
+}

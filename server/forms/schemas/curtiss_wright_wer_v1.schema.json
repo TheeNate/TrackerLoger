@@ -1,0 +1,59 @@
+{
+  "form_id": "curtiss_wright_wer_v1",
+  "company": "Curtiss-Wright (LMT Nuclear Division)",
+  "form_title": "Work Experience Record",
+  "blank_pdf": "CurtissWright_WorkExperience_Fillable.pdf",
+  "page_count": 1,
+  "method_codes": ["MT", "PT", "UTT", "VT_1", "VT_2", "VT_3", "VWE", "TOTAL"],
+  "method_code_labels": {
+    "MT":   "Magnetic Particle Testing",
+    "PT":   "Penetrant Testing (Liquid Penetrant)",
+    "UTT":  "Ultrasonic Thickness",
+    "VT_1": "Visual Testing Level 1",
+    "VT_2": "Visual Testing Level 2",
+    "VT_3": "Visual Testing Level 3",
+    "VWE":  "Visual Welding Examination (verify w/ company)",
+    "TOTAL":"Per-day or per-week total"
+  },
+  "structure_notes": [
+    "Form has two week-ending blocks per page (Week 1 above, Week 2 below).",
+    "Each block has 7 day rows (Sunday..Saturday) plus a TOTAL row.",
+    "Each row has 8 method cells. The last 'TOTAL' column is meant to be the per-day sum."
+  ],
+  "days": ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"],
+  "fields": {
+    "header": {
+      "name":       { "pdf_field": "name",       "type": "text", "label": "Name (PRINT)" },
+      "job_number": { "pdf_field": "job_number", "type": "text", "label": "Job #" }
+    },
+    "week_template": {
+      "description": "There are two weeks: week1 and week2. PDF field names follow: <weekId>_<key> where weekId is week1 or week2.",
+      "ending_field": "<weekId>_ending",
+      "ending_format": "MM/DD/YYYY",
+      "day_cell_field": "<weekId>_<day>_<methodCode>",
+      "day_total_field": "<weekId>_<day>_TOTAL",
+      "week_total_field": "<weekId>_total_<methodCode>"
+    }
+  },
+  "all_pdf_field_names": [
+    "name", "job_number",
+    "week1_ending",
+    "week1_sunday_MT", "week1_sunday_PT", "week1_sunday_UTT", "week1_sunday_VT_1", "week1_sunday_VT_2", "week1_sunday_VT_3", "week1_sunday_VWE", "week1_sunday_TOTAL",
+    "week1_monday_MT", "week1_monday_PT", "week1_monday_UTT", "week1_monday_VT_1", "week1_monday_VT_2", "week1_monday_VT_3", "week1_monday_VWE", "week1_monday_TOTAL",
+    "week1_tuesday_MT", "week1_tuesday_PT", "week1_tuesday_UTT", "week1_tuesday_VT_1", "week1_tuesday_VT_2", "week1_tuesday_VT_3", "week1_tuesday_VWE", "week1_tuesday_TOTAL",
+    "week1_wednesday_MT", "week1_wednesday_PT", "week1_wednesday_UTT", "week1_wednesday_VT_1", "week1_wednesday_VT_2", "week1_wednesday_VT_3", "week1_wednesday_VWE", "week1_wednesday_TOTAL",
+    "week1_thursday_MT", "week1_thursday_PT", "week1_thursday_UTT", "week1_thursday_VT_1", "week1_thursday_VT_2", "week1_thursday_VT_3", "week1_thursday_VWE", "week1_thursday_TOTAL",
+    "week1_friday_MT", "week1_friday_PT", "week1_friday_UTT", "week1_friday_VT_1", "week1_friday_VT_2", "week1_friday_VT_3", "week1_friday_VWE", "week1_friday_TOTAL",
+    "week1_saturday_MT", "week1_saturday_PT", "week1_saturday_UTT", "week1_saturday_VT_1", "week1_saturday_VT_2", "week1_saturday_VT_3", "week1_saturday_VWE", "week1_saturday_TOTAL",
+    "week1_total_MT", "week1_total_PT", "week1_total_UTT", "week1_total_VT_1", "week1_total_VT_2", "week1_total_VT_3", "week1_total_VWE", "week1_total_TOTAL",
+    "week2_ending",
+    "week2_sunday_MT", "week2_sunday_PT", "week2_sunday_UTT", "week2_sunday_VT_1", "week2_sunday_VT_2", "week2_sunday_VT_3", "week2_sunday_VWE", "week2_sunday_TOTAL",
+    "week2_monday_MT", "week2_monday_PT", "week2_monday_UTT", "week2_monday_VT_1", "week2_monday_VT_2", "week2_monday_VT_3", "week2_monday_VWE", "week2_monday_TOTAL",
+    "week2_tuesday_MT", "week2_tuesday_PT", "week2_tuesday_UTT", "week2_tuesday_VT_1", "week2_tuesday_VT_2", "week2_tuesday_VT_3", "week2_tuesday_VWE", "week2_tuesday_TOTAL",
+    "week2_wednesday_MT", "week2_wednesday_PT", "week2_wednesday_UTT", "week2_wednesday_VT_1", "week2_wednesday_VT_2", "week2_wednesday_VT_3", "week2_wednesday_VWE", "week2_wednesday_TOTAL",
+    "week2_thursday_MT", "week2_thursday_PT", "week2_thursday_UTT", "week2_thursday_VT_1", "week2_thursday_VT_2", "week2_thursday_VT_3", "week2_thursday_VWE", "week2_thursday_TOTAL",
+    "week2_friday_MT", "week2_friday_PT", "week2_friday_UTT", "week2_friday_VT_1", "week2_friday_VT_2", "week2_friday_VT_3", "week2_friday_VWE", "week2_friday_TOTAL",
+    "week2_saturday_MT", "week2_saturday_PT", "week2_saturday_UTT", "week2_saturday_VT_1", "week2_saturday_VT_2", "week2_saturday_VT_3", "week2_saturday_VWE", "week2_saturday_TOTAL",
+    "week2_total_MT", "week2_total_PT", "week2_total_UTT", "week2_total_VT_1", "week2_total_VT_2", "week2_total_VT_3", "week2_total_VWE", "week2_total_TOTAL"
+  ]
+}
