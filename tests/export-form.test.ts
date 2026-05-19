@@ -40,6 +40,8 @@ vi.mock("../server/extraction", () => ({
 const storageMock = vi.hoisted(() => ({
   getUser: vi.fn(),
   getEntries: vi.fn(),
+  getRopeHours: vi.fn(),
+  getSupervisors: vi.fn(),
 }));
 
 vi.mock("../server/storage", () => ({ storage: storageMock }));
@@ -127,6 +129,73 @@ describe("POST /api/export-form", () => {
     const res = await request(app)
       .post("/api/export-form")
       .send({ form_id: "mistras_ojt_v1", entry_ids: entries.map((e) => e.id) });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe("form_capacity");
+  });
+});
+
+describe("POST /api/export-form — rope hours forms", () => {
+  let app: Express;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    app = express();
+    app.use(express.json());
+    await registerRoutes(app);
+    storageMock.getUser.mockResolvedValue(makeProfile());
+  });
+
+  function makeRope(id: number, startDate: string, method: string = "MT", hours: number = 4) {
+    return {
+      id, userId: 1,
+      startDate: new Date(startDate), endDate: new Date(startDate),
+      location: "Site", skills: "rigging", hours,
+      employer: null, workDetails: null, maxHeight: null,
+      verified: false, verifiedBy: null, verificationToken: null, verifiedAt: null,
+      createdAt: new Date(startDate),
+      technicianSignature: null, supervisorSignature: null, dataHash: null,
+      integritySignature: null, verificationRequestedAt: null, auditTrail: null,
+      supervisorIpAddress: null, supervisorBrowserInfo: null, employeeIdUsed: null,
+      sourceDocumentKey: null, sourceDocumentName: null, importedAt: null,
+    };
+  }
+
+  it("returns a PDF for sprat_log_v1 with valid rope hours", async () => {
+    storageMock.getRopeHours.mockResolvedValue([
+      makeRope(1, "2026-05-04T00:00:00Z"),
+      makeRope(2, "2026-05-05T00:00:00Z"),
+    ]);
+    storageMock.getSupervisors.mockResolvedValue([]);
+
+    const res = await request(app)
+      .post("/api/export-form")
+      .send({ form_id: "sprat_log_v1", entry_ids: [1, 2] })
+      .buffer(true);
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/application\/pdf/);
+    expect(res.body.slice(0, 4).toString()).toBe("%PDF");
+  });
+
+  it("returns 403 when rope hours are not owned by the user", async () => {
+    storageMock.getRopeHours.mockResolvedValue([makeRope(1, "2026-05-04T00:00:00Z")]);
+    storageMock.getSupervisors.mockResolvedValue([]);
+
+    const res = await request(app)
+      .post("/api/export-form")
+      .send({ form_id: "sprat_log_v1", entry_ids: [1, 999] });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("entry_not_found");
+  });
+
+  it("returns 422 form_capacity for SPRAT with more than 6 rope hours", async () => {
+    const rope = Array.from({ length: 7 }, (_, i) =>
+      makeRope(i + 1, `2026-05-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`));
+    storageMock.getRopeHours.mockResolvedValue(rope);
+    storageMock.getSupervisors.mockResolvedValue([]);
+
+    const res = await request(app)
+      .post("/api/export-form")
+      .send({ form_id: "sprat_log_v1", entry_ids: rope.map((r) => r.id) });
     expect(res.status).toBe(422);
     expect(res.body.code).toBe("form_capacity");
   });
