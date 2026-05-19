@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import type { Entry, User } from "@shared/schema";
 import { mistrasAdapter } from "../../server/forms/adapters/mistras_ojt_v1";
 import { FormCapacityError, EmptyExportError, NothingToExportError } from "../../server/forms/types";
+import path from "path";
+import { PDFDocument } from "pdf-lib";
+import { fillForm } from "../../server/forms/filler";
 
 function makeProfile(overrides: Partial<User> = {}): User {
   return {
@@ -144,5 +147,33 @@ describe("mistrasAdapter — bounds and unmapped methods", () => {
     });
     expect(out.total_MT).toBe("5");
     expect(out.total_PT).toBe("1.5");
+  });
+});
+
+const MISTRAS_BLANK = path.resolve(
+  __dirname, "..", "..", "server", "forms", "blanks", "MISTRAS_OJT_Fillable.pdf",
+);
+
+describe("mistrasAdapter — round-trip through filler", () => {
+  it("every field the adapter writes reads back identical from the filled PDF", async () => {
+    const profile = makeProfile({ name: "Round Trip", employeeNumber: "RT-007" });
+    const entries = [
+      makeEntry({ id: 1, date: new Date("2026-05-04T00:00:00Z"), method: "MT",      hours: 4,   location: "Site A", verifiedBy: "Sup A" }),
+      makeEntry({ id: 2, date: new Date("2026-05-05T00:00:00Z"), method: "UT_THK",  hours: 2.5, location: "Site B", verifiedBy: "Sup B" }),
+      makeEntry({ id: 3, date: new Date("2026-05-06T00:00:00Z"), method: "PMI",     hours: 1,   location: "Site C" }),
+      makeEntry({ id: 4, date: new Date("2026-05-07T00:00:00Z"), method: "PAUT",    hours: 3,   location: "Site D" }),
+    ];
+
+    const expected = mistrasAdapter({ entries, profile });
+    const bytes = await fillForm(MISTRAS_BLANK, expected);
+
+    const reopened = await PDFDocument.load(bytes);
+    const form = reopened.getForm();
+
+    for (const [name, value] of Object.entries(expected)) {
+      // pdf-lib getText() returns undefined for empty fields; treat as ""
+      const actual = form.getTextField(name).getText() ?? "";
+      expect(actual, `field ${name}`).toBe(value);
+    }
   });
 });
