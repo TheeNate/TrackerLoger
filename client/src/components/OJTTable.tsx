@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Entry } from "@shared/schema";
 import { EntryRow } from "@/components/EntryRow";
 import { ImportedLogGroups } from "@/components/ImportedLogGroups";
+import { ExportFormDialog } from "@/components/ExportFormDialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ListChecks } from "lucide-react";
@@ -33,6 +34,8 @@ export function OJTTable({
     }, initialTotals);
   }, [entries]);
 
+  const [exportOpen, setExportOpen] = useState(false);
+
   const unverifiedEntries = entries.filter((e) => !e.verified);
   const allUnverifiedSelected =
     unverifiedEntries.length > 0 &&
@@ -51,16 +54,27 @@ export function OJTTable({
       <ImportedLogGroups records={entries} recordType="entry" />
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-neutral-900">Experience Hours (OJT) Log</h2>
-        {selectedEntryIds.size >= 2 && (
-          <Button
-            onClick={onBatchVerifyRequest}
-            size="sm"
-            className="flex items-center gap-2"
-          >
-            <ListChecks className="h-4 w-4" />
-            Request Batch Verification ({selectedEntryIds.size} entries)
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {selectedEntryIds.size >= 2 && (
+            <Button
+              onClick={onBatchVerifyRequest}
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <ListChecks className="h-4 w-4" />
+              Request Batch Verification ({selectedEntryIds.size} entries)
+            </Button>
+          )}
+          {selectedEntryIds.size >= 1 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setExportOpen(true)}
+            >
+              Export to form ({selectedEntryIds.size})
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -132,6 +146,12 @@ export function OJTTable({
           <span>Verified Entry</span>
         </div>
       </div>
+
+      <ExportFormDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        selectedEntries={entries.filter((e) => selectedEntryIds.has(e.id))}
+      />
     </div>
   );
 }
