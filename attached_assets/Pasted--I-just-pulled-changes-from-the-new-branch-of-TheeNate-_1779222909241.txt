@@ -1,0 +1,78 @@
+ I just pulled changes from the `new` branch of TheeNate/TrackerLoger on GitHub
+  and redeployed, but I'm not seeing the new feature in the deployed app.
+  Please audit whether the pulled code actually contains the recent work and
+  whether the deploy used the new code.
+
+  CONTEXT — what should be there:
+
+  The latest commit on origin/new is 5efb33e ("tools: script to generate
+  sample-filled vendor PDFs"). On top of c7dfd99 ("Published your App"), there
+  should be 19 new commits adding a PDF-form export feature for MISTRAS and
+  Curtiss-Wright vendor forms.
+
+  PLEASE DO THESE CHECKS AND REPORT BACK:
+
+  1. Run `git log --oneline origin/new..HEAD` from the repo root. Expected:
+     no output (local HEAD already includes everything on origin/new) OR a
+     note that HEAD is at 5efb33e.
+
+     Also run `git log --oneline -19`. Expected: the topmost commit is
+     `5efb33e tools: script to generate sample-filled vendor PDFs` followed
+     by 18 more `feat(forms)/feat(api)/feat(client)/feat(schema)/feat/test/
+     chore/build/deps` commits. If the topmost commit is `c7dfd99 Published
+     your App`, the pull did not actually move HEAD — re-pull.
+
+     - server/forms/types.ts
+     - server/forms/paths.ts
+     - server/forms/filler.ts
+     - server/forms/registry.ts
+     - server/forms/adapters/mistras_ojt_v1.ts
+     - server/forms/adapters/curtiss_wright_wer_v1.ts
+     - server/forms/blanks/MISTRAS_OJT_Fillable.pdf
+     - server/forms/blanks/CurtissWright_WorkExperience_Fillable.pdf
+     - server/forms/schemas/mistras_ojt_v1.schema.json
+     - server/forms/schemas/curtiss_wright_wer_v1.schema.json
+     - client/src/components/ExportFormDialog.tsx
+     - tests/forms/filler.test.ts
+     - tests/forms/mistras_ojt_v1.test.ts
+     - tests/forms/curtiss_wright_wer_v1.test.ts
+     - tests/export-form.test.ts
+     - scripts/gen-sample-pdfs.ts
+     
+  3. In `shared/schema.ts`, confirm the `NDTMethods` constant includes these
+     six new entries beyond the original nine: `PAUT`, `VT_1`, `VT_2`, `VT_3`,
+     `VWE`, `UT`. Should be 15 keys total.
+     
+  4. In `package.json`:
+     - Confirm `"pdf-lib"` is in `dependencies`.
+     - Confirm the `build` script ends with:
+       `&& mkdir -p dist/forms && cp -r server/forms/blanks dist/forms/blanks && cp -r server/forms/schemas dist/forms/schemas`
+
+  5. In `server/routes.ts`, grep for `/api/export-form`. Expected: a
+     `app.post("/api/export-form", requireAuth, ...)` handler exists.
+
+  6. In `client/src/components/OJTTable.tsx`, grep for `ExportFormDialog` and
+     `Export to form`. Both should be present — an import of
+     `ExportFormDialog` and a button labeled `Export to form (...)`.
+
+  7. Run `npm install` to make sure `pdf-lib` is actually installed in this
+     Replit environment's node_modules. Then run `npx vitest run tests/forms/`
+     and report the pass/fail counts. Expected: 28 tests pass across 3 files
+     (filler, MISTRAS, CW).
+
+  8. Confirm the deploy used the new build:
+     - Run `npm run build`. After it finishes, run
+       `ls dist/forms/blanks dist/forms/schemas`. Both directories must
+       contain the corresponding files. If they don't, the build did not pick
+       up the updated package.json `build` script.
+     - In the deployed app's UI, open the OJT log table and select any
+       entry. A button labeled `Export to form (1)` should appear next to the
+       existing batch-verify button.
+
+  REPORT BACK:
+  - Result of each check (✓ or ✗ with what was found).
+  - If anything is missing, list it explicitly.
+  - If everything is present but the user still doesn't see the feature in
+    the deployed app, suggest specific next steps (e.g., hard-refresh the
+    browser to clear the service worker cache — the app is a PWA, so the SW
+    may be serving an old shell).
