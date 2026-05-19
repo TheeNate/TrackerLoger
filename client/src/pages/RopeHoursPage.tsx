@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ExportRopeFormDialog } from "@/components/ExportRopeFormDialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,6 +50,17 @@ export default function RopeHoursPage() {
   const [maxHeight, setMaxHeight] = useState("");
   const [editingRopeHour, setEditingRopeHour] = useState<RopeHours | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [selectedRopeHourIds, setSelectedRopeHourIds] = useState<Set<number>>(new Set());
+  const [exportOpen, setExportOpen] = useState(false);
+
+  const toggleSelected = (id: number) => {
+    setSelectedRopeHourIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
   const { toast } = useToast();
   const online = useOnlineStatus();
 
@@ -266,27 +279,34 @@ export default function RopeHoursPage() {
             <Cable className="h-8 w-8 text-blue-600" />
             <h1 className="text-3xl font-bold">Rope Hours Tracking</h1>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              if (!online) {
-                toast({
-                  title: "Requires internet",
-                  description:
-                    "Importing a signed log uses AI and storage that needs a connection.",
-                  variant: "destructive",
-                });
-                return;
-              }
-              setIsImportDialogOpen(true);
-            }}
-            disabled={!online}
-            title={online ? "Import a signed log" : "Import requires internet"}
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Import from signed log
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {selectedRopeHourIds.size >= 1 && (
+              <Button variant="outline" onClick={() => setExportOpen(true)}>
+                Export to form ({selectedRopeHourIds.size})
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (!online) {
+                  toast({
+                    title: "Requires internet",
+                    description:
+                      "Importing a signed log uses AI and storage that needs a connection.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                setIsImportDialogOpen(true);
+              }}
+              disabled={!online}
+              title={online ? "Import a signed log" : "Import requires internet"}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Import from signed log
+            </Button>
+          </div>
         </div>
 
       {/* Total Hours Summary */}
@@ -498,6 +518,13 @@ export default function RopeHoursPage() {
                   }`}
                 >
                   <div className="flex justify-between items-start">
+                    <div className="flex gap-3 items-start">
+                    <Checkbox
+                      checked={selectedRopeHourIds.has(entry.id)}
+                      onCheckedChange={() => toggleSelected(entry.id)}
+                      aria-label={`Select rope hour from ${format(new Date(entry.startDate), "M/d/yyyy")}`}
+                      className="mt-1"
+                    />
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-gray-500" />
@@ -543,6 +570,7 @@ export default function RopeHoursPage() {
                           </span>
                         </div>
                       ) : null}
+                    </div>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       {failed ? (
@@ -712,6 +740,12 @@ export default function RopeHoursPage() {
         ropeHour={editingRopeHour}
         open={!!editingRopeHour}
         onClose={() => setEditingRopeHour(null)}
+      />
+
+      <ExportRopeFormDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        selectedRopeHours={(ropeHours as RopeHours[]).filter((r) => selectedRopeHourIds.has(r.id))}
       />
     </div>
   );
