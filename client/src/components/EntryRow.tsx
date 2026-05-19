@@ -212,8 +212,7 @@ export function EntryRow({
   return (
     <tr className={rowClass}>
       <td className="px-3 py-3 whitespace-nowrap">
-        {!entry.verified &&
-          !isImported &&
+        {!isImported &&
           !pendingSync &&
           !syncFailed &&
           onToggleSelect && (

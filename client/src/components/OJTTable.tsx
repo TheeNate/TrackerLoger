@@ -37,17 +37,31 @@ export function OJTTable({
   const [exportOpen, setExportOpen] = useState(false);
 
   const unverifiedEntries = entries.filter((e) => !e.verified);
-  const allUnverifiedSelected =
-    unverifiedEntries.length > 0 &&
-    unverifiedEntries.every((e) => selectedEntryIds.has(e.id));
+  // Selectable rows are anything not imported (imported rows show their own
+  // group controls). Verified rows are selectable so they can be exported
+  // to a vendor PDF form.
+  const selectableEntries = entries.filter((e) => !(e as Entry & { imported?: boolean }).imported);
+  const allSelectableSelected =
+    selectableEntries.length > 0 &&
+    selectableEntries.every((e) => selectedEntryIds.has(e.id));
 
   const handleSelectAll = () => {
-    if (allUnverifiedSelected) {
-      unverifiedEntries.forEach((e) => onToggleSelect(e.id));
+    if (allSelectableSelected) {
+      selectableEntries.forEach((e) => onToggleSelect(e.id));
     } else {
-      unverifiedEntries.filter((e) => !selectedEntryIds.has(e.id)).forEach((e) => onToggleSelect(e.id));
+      selectableEntries
+        .filter((e) => !selectedEntryIds.has(e.id))
+        .forEach((e) => onToggleSelect(e.id));
     }
   };
+
+  // Batch-verify only makes sense when every selected entry is unverified.
+  const selectedUnverifiedCount = entries.filter(
+    (e) => selectedEntryIds.has(e.id) && !e.verified,
+  ).length;
+  const canBatchVerify =
+    selectedUnverifiedCount >= 2 &&
+    selectedUnverifiedCount === selectedEntryIds.size;
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
@@ -55,14 +69,14 @@ export function OJTTable({
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-neutral-900">Experience Hours (OJT) Log</h2>
         <div className="flex flex-wrap gap-2">
-          {selectedEntryIds.size >= 2 && (
+          {canBatchVerify && (
             <Button
               onClick={onBatchVerifyRequest}
               size="sm"
               className="flex items-center gap-2"
             >
               <ListChecks className="h-4 w-4" />
-              Request Batch Verification ({selectedEntryIds.size} entries)
+              Request Batch Verification ({selectedUnverifiedCount} entries)
             </Button>
           )}
           {selectedEntryIds.size >= 1 && (
@@ -82,11 +96,11 @@ export function OJTTable({
           <thead>
             <tr>
               <th scope="col" className="px-3 py-3 text-left w-8">
-                {unverifiedEntries.length > 0 && (
+                {selectableEntries.length > 0 && (
                   <Checkbox
-                    checked={allUnverifiedSelected}
+                    checked={allSelectableSelected}
                     onCheckedChange={handleSelectAll}
-                    aria-label="Select all unverified entries"
+                    aria-label="Select all entries"
                   />
                 )}
               </th>
@@ -138,7 +152,8 @@ export function OJTTable({
       <div className="mt-4 flex items-center justify-between text-sm text-neutral-500">
         {unverifiedEntries.length > 0 && (
           <span>
-            Select 2 or more unverified entries to request batch verification.
+            Select entries to export to a vendor PDF, or 2+ unverified entries
+            to request batch verification.
           </span>
         )}
         <div className="flex items-center space-x-1 ml-auto">
