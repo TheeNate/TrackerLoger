@@ -39,6 +39,13 @@ import {
   ObjectNotFoundError,
 } from "./replit_integrations/object_storage/objectStorage";
 import { extractOJTRows, extractRopeRows } from "./extraction";
+import { fillForm } from "./forms/filler";
+import { isFormId, registry } from "./forms/registry";
+import {
+  EmptyExportError,
+  FormCapacityError,
+  NothingToExportError,
+} from "./forms/types";
 
 // Extend express-session types
 declare module "express-session" {
@@ -597,6 +604,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error deleting entry:", error);
       res.status(500).json({ message: "Error deleting entry" });
     }
+  });
+
+  // Export OJT entries into a vendor PDF form
+  app.post("/api/export-form", requireAuth, async (req, res) => {
+    const userId = req.session.userId!;
+    const { form_id, entry_ids, header_overrides } = req.body ?? {};
+
+    if (!isFormId(form_id)) {
+      return res.status(422).json({
+        message: "Unknown form_id",
+        code: "unknown_form",
+        details: { supported: Object.keys(registry) },
+      });
+    }
+
+    if (!Array.isArray(entry_ids) || entry_ids.length === 0
+        || !entry_ids.every((id) => Number.isInteger(id) && id > 0)) {
+      return res.status(422).json({
+        message: "entry_ids must be a non-empty array of positive integers",
+        code: "empty_export",
+      });
+    }
+
+    const requestedIds = new Set<number>(entry_ids);
+    const userEntries = await storage.getEntries(userId);
+    const selected = userEntries.filter((e) => requestedIds.has(e.id));
+
+    if (selected.length !== requestedIds.size) {
+      return res.status(403).json({
+        message: "One or more entry_ids are not accessible",
+        code: "entry_not_found",
+      });
+    }
+
+    const profile = await storage.getUser(userId);
+    if (!profile) {
+      return res.status(401).json({ message: "Profile not found", code: "unauthorized" });
+    }
+
+    const { blankPath, adapter } = registry[form_id];
+
+    let fieldValues;
+    try {
+      fieldValues = adapter({
+        entries: selected,
+        profile,
+        headerOverrides: header_overrides,
+      });
+    } catch (err) {
+      if (err instanceof FormCapacityError) {
+        return res.status(422).json({
+          message: err.message,
+          code: "form_capacity",
+          details: { max: err.max, got: err.got, unit: err.unit },
+        });
+      }
+      if (err instanceof EmptyExportError) {
+        return res.status(422).json({ message: err.message, code: "empty_export" });
+      }
+      if (err instanceof NothingToExportError) {
+        return res.status(422).json({ message: err.message, code: "nothing_to_export" });
+      }
+      console.error("Adapter error:", err);
+      return res.status(500).json({ message: "Adapter failed", code: "internal_error" });
+    }
+
+    let bytes;
+    try {
+      bytes = await fillForm(blankPath, fieldValues);
+    } catch (err) {
+      console.error(`fillForm failed for ${form_id}:`, err);
+      return res.status(500).json({ message: "Form fill failed", code: "internal_error" });
+    }
+
+    const dates = selected.map((e) => e.date.getTime()).sort();
+    const earliest = new Date(dates[0]).toISOString().slice(0, 10);
+    const latest = new Date(dates[dates.length - 1]).toISOString().slice(0, 10);
+    const filename = `${form_id}_${earliest}_to_${latest}.pdf`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(Buffer.from(bytes));
   });
 
   // Supervisor routes
