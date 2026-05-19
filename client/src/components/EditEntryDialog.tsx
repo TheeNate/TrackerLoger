@@ -31,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Entry } from "@shared/schema";
+import { Entry, NDTMethods } from "@shared/schema";
 
 const formSchema = z.object({
   date: z.string().min(1, "Date is required"),
@@ -42,17 +42,10 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-const methodOptions = [
-  { value: "ET", label: "ET" },
-  { value: "RFT", label: "RFT" },
-  { value: "MT", label: "MT" },
-  { value: "PT", label: "PT" },
-  { value: "RT", label: "RT" },
-  { value: "UT_THK", label: "UT Thk." },
-  { value: "UTSW", label: "UTSW" },
-  { value: "PMI", label: "PMI" },
-  { value: "LSI", label: "LSI" },
-];
+const methodOptions = Object.keys(NDTMethods).map((key) => ({
+  value: key,
+  label: key === "UT_THK" ? "UT Thk." : key,
+}));
 
 interface EditEntryDialogProps {
   entry: Entry | null;

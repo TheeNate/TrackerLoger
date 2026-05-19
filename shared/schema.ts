@@ -198,6 +198,13 @@ export const NDTMethods = {
   UTSW: "UTSW",
   PMI: "PMI",
   LSI: "LSI",
+  // Added 2026-05-19 for vendor-form support
+  PAUT: "PAUT",
+  VT_1: "VT_1",
+  VT_2: "VT_2",
+  VT_3: "VT_3",
+  VWE: "VWE",
+  UT: "UT",
 } as const;
 
 export type NDTMethod = keyof typeof NDTMethods;
