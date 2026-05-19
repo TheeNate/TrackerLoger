@@ -35,6 +35,9 @@ export function EditRopeHourDialog({
   const [location, setLocation] = useState("");
   const [skills, setSkills] = useState("");
   const [hours, setHours] = useState("");
+  const [employer, setEmployer] = useState("");
+  const [workDetails, setWorkDetails] = useState("");
+  const [maxHeight, setMaxHeight] = useState("");
 
   useEffect(() => {
     if (ropeHour && open) {
@@ -43,6 +46,9 @@ export function EditRopeHourDialog({
       setLocation(ropeHour.location);
       setSkills(ropeHour.skills);
       setHours(String(ropeHour.hours));
+      setEmployer(ropeHour.employer ?? "");
+      setWorkDetails(ropeHour.workDetails ?? "");
+      setMaxHeight(ropeHour.maxHeight ?? "");
     }
   }, [ropeHour, open]);
 
@@ -89,6 +95,9 @@ export function EditRopeHourDialog({
         location,
         skills,
         hours: parseFloat(hours),
+        employer: employer || undefined,
+        workDetails: workDetails || undefined,
+        maxHeight: maxHeight || undefined,
       },
     });
     toast({
@@ -170,6 +179,36 @@ export function EditRopeHourDialog({
               value={hours}
               onChange={(e) => setHours(e.target.value)}
               required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-employer">Employer (optional)</Label>
+            <Input
+              id="edit-employer"
+              value={employer}
+              onChange={(e) => setEmployer(e.target.value)}
+              placeholder="e.g. Acme Inc"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-workDetails">Work details (optional)</Label>
+            <Textarea
+              id="edit-workDetails"
+              value={workDetails}
+              onChange={(e) => setWorkDetails(e.target.value)}
+              placeholder="What the work was — used for SPRAT and IRATA exports"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-maxHeight">Max height (optional, IRATA exports)</Label>
+            <Input
+              id="edit-maxHeight"
+              value={maxHeight}
+              onChange={(e) => setMaxHeight(e.target.value)}
+              placeholder="e.g. 12m / 40ft"
             />
           </div>
 

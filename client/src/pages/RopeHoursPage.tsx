@@ -43,6 +43,9 @@ export default function RopeHoursPage() {
   const [location, setLocation] = useState("");
   const [skills, setSkills] = useState("");
   const [hours, setHours] = useState("");
+  const [employer, setEmployer] = useState("");
+  const [workDetails, setWorkDetails] = useState("");
+  const [maxHeight, setMaxHeight] = useState("");
   const [editingRopeHour, setEditingRopeHour] = useState<RopeHours | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const { toast } = useToast();
@@ -113,6 +116,9 @@ export default function RopeHoursPage() {
         location,
         skills,
         hours: parseFloat(hours),
+        ...(employer ? { employer } : {}),
+        ...(workDetails ? { workDetails } : {}),
+        ...(maxHeight ? { maxHeight } : {}),
       },
     });
 
@@ -123,6 +129,9 @@ export default function RopeHoursPage() {
     setLocation("");
     setSkills("");
     setHours("");
+    setEmployer("");
+    setWorkDetails("");
+    setMaxHeight("");
 
     toast({
       title: online ? "Rope hours logged" : "Saved offline",
@@ -408,7 +417,37 @@ export default function RopeHoursPage() {
                 required
               />
             </div>
-            
+
+            <div className="space-y-2">
+              <Label htmlFor="employer">Employer (optional)</Label>
+              <Input
+                id="employer"
+                value={employer}
+                onChange={(e) => setEmployer(e.target.value)}
+                placeholder="e.g. Acme Inc"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="workDetails">Work details (optional)</Label>
+              <Textarea
+                id="workDetails"
+                value={workDetails}
+                onChange={(e) => setWorkDetails(e.target.value)}
+                placeholder="What the work was — used for SPRAT and IRATA exports"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="maxHeight">Max height (optional, IRATA exports)</Label>
+              <Input
+                id="maxHeight"
+                value={maxHeight}
+                onChange={(e) => setMaxHeight(e.target.value)}
+                placeholder="e.g. 12m / 40ft"
+              />
+            </div>
+
             <Button type="submit">
               {online ? "Log Rope Hours" : "Log Offline"}
             </Button>

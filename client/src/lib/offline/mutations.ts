@@ -27,6 +27,9 @@ export type RopeDraft = {
   location: string;
   skills: string;
   hours: number;
+  employer?: string;
+  workDetails?: string;
+  maxHeight?: string;
 };
 
 // Temp IDs must stay unique across reloads — otherwise a freshly assigned
