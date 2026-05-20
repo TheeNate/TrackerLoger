@@ -1646,7 +1646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     endDate: z.coerce.date(),
     location: z.string().min(1).max(500),
     skills: z.string().min(1).max(2000),
-    hours: z.number().positive().max(24),
+    hours: z.number().positive(),
   });
   const commitBodySchema = z.object({
     type: z.enum(["ojt", "rope"]),

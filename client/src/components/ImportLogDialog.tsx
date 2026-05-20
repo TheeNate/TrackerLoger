@@ -298,10 +298,10 @@ export function ImportLogDialog({ open, onClose, type }: ImportLogDialogProps) {
         if (!r.skills.trim())
           return { ok: false, error: `Row ${i + 1}: skills required` };
         const hrs = parseFloat(r.hours);
-        if (!Number.isFinite(hrs) || hrs <= 0 || hrs > 24)
+        if (!Number.isFinite(hrs) || hrs <= 0)
           return {
             ok: false,
-            error: `Row ${i + 1}: hours must be between 0 and 24`,
+            error: `Row ${i + 1}: hours must be greater than 0`,
           };
         built.push({
           startDate: r.startDate,
@@ -577,7 +577,6 @@ export function ImportLogDialog({ open, onClose, type }: ImportLogDialogProps) {
                           type="number"
                           step="0.1"
                           min="0"
-                          max="24"
                           value={row.hours}
                           onChange={(e) =>
                             updateRopeRow(idx, { hours: e.target.value })
