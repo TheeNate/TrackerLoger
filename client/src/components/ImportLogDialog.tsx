@@ -393,12 +393,12 @@ export function ImportLogDialog({ open, onClose, type }: ImportLogDialogProps) {
             <div className="border-2 border-dashed border-neutral-300 rounded-lg p-8 text-center">
               <Upload className="h-10 w-10 mx-auto mb-3 text-neutral-400" />
               <p className="text-sm text-neutral-600 mb-4">
-                PDF, JPG, PNG, or WEBP. Max 15 MB.
+                PDF, JPG, PNG, WEBP, or Sprat .xlsx export. Max 15 MB.
               </p>
               <Input
                 ref={fileInputRef}
                 type="file"
-                accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp,image/heic"
+                accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp,image/heic,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx"
                 onChange={handleFileSelected}
                 disabled={isExtracting}
                 className="max-w-sm mx-auto"
@@ -406,7 +406,7 @@ export function ImportLogDialog({ open, onClose, type }: ImportLogDialogProps) {
               {isExtracting && (
                 <div className="flex items-center justify-center gap-2 mt-4 text-sm text-neutral-600">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Reading your document with AI…
+                  Importing document…
                 </div>
               )}
             </div>

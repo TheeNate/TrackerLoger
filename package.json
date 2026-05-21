@@ -46,6 +46,7 @@
     "@tanstack/react-query-persist-client": "^5.100.10",
     "@types/bcrypt": "^5.0.2",
     "@types/multer": "^2.1.0",
+    "@types/pdf-parse": "^1.1.5",
     "@types/supertest": "^7.2.0",
     "@uppy/aws-s3": "^5.1.0",
     "@uppy/core": "^5.2.0",
@@ -84,6 +85,7 @@
     "passport-local": "^1.0.0",
     "path-to-regexp": "^0.1.13",
     "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
     "picomatch": "^2.3.2",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
@@ -106,6 +108,7 @@
     "workbox-window": "^7.4.1",
     "wouter": "^3.3.5",
     "ws": "^8.18.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.25.76",
     "zod-validation-error": "^3.5.4"
   },

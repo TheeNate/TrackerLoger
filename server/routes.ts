@@ -1561,6 +1561,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "image/png",
     "image/webp",
     "image/heic",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
   ]);
 
   // Upload a signed-log file, run AI extraction, return parsed rows + key.

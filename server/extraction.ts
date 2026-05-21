@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import * as XLSX from "xlsx";
 import { NDTMethods, type NDTMethod } from "@shared/schema";
 
 const VALID_METHODS = Object.keys(NDTMethods) as NDTMethod[];
@@ -80,6 +81,14 @@ function isImageMime(mime: string): boolean {
 
 function isPdfMime(mime: string): boolean {
   return mime === "application/pdf" || mime === "application/x-pdf";
+}
+
+function isXlsxMime(mime: string): boolean {
+  return (
+    mime ===
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    mime === "application/vnd.ms-excel"
+  );
 }
 
 async function callVisionExtraction(
@@ -194,6 +203,275 @@ function sanitizeRopeRows(parsed: unknown): ExtractedRopeRow[] {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Sprat logbook detection and parsing
+// ---------------------------------------------------------------------------
+
+type SpratRow = Record<string, unknown>;
+
+/**
+ * Normalise a US-style date string (M/D/YYYY) to ISO YYYY-MM-DD.
+ * Also handles ISO format directly.
+ */
+function normalizeSpratDate(val: unknown): string {
+  if (!val) return "";
+  const str = String(val).trim();
+  if (!str) return "";
+
+  // Try ISO / unambiguous first (new Date handles these well)
+  const iso = new Date(str);
+  if (!Number.isNaN(iso.getTime()) && /^\d{4}-\d{2}-\d{2}/.test(str)) {
+    return str.slice(0, 10);
+  }
+
+  // M/D/YYYY or MM/DD/YYYY
+  const mdyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mdyMatch) {
+    const [, m, d, y] = mdyMatch;
+    const d2 = new Date(`${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`);
+    if (!Number.isNaN(d2.getTime())) {
+      return d2.toISOString().slice(0, 10);
+    }
+  }
+
+  // Fallback: let JS parse it and hope for the best
+  const fallback = new Date(str);
+  if (!Number.isNaN(fallback.getTime())) {
+    return fallback.toISOString().slice(0, 10);
+  }
+  return "";
+}
+
+// ---- Xlsx-based Sprat parser -----------------------------------------------
+
+const SPRAT_REQUIRED_COLUMNS = new Set([
+  "start_date",
+  "finish_date",
+  "hours_worked",
+  "minutes_worked",
+]);
+
+/**
+ * Try to parse an xlsx buffer as a Sprat export.
+ * Returns null if the file does not look like a Sprat export.
+ */
+function parseSpratXlsx(buffer: Buffer): SpratRow[] | null {
+  let workbook: XLSX.WorkBook;
+  try {
+    workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  } catch {
+    return null;
+  }
+
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) return null;
+
+  const sheet = workbook.Sheets[sheetName];
+  const rawRows = XLSX.utils.sheet_to_json<SpratRow>(sheet, {
+    defval: "",
+    raw: false,
+  });
+
+  if (rawRows.length === 0) return null;
+
+  const firstKeys = new Set(
+    Object.keys(rawRows[0]).map((k) => k.toLowerCase().trim()),
+  );
+  for (const col of SPRAT_REQUIRED_COLUMNS) {
+    if (!firstKeys.has(col)) return null;
+  }
+
+  return rawRows;
+}
+
+function getSpratField(row: SpratRow, ...keys: string[]): string {
+  for (const key of keys) {
+    for (const rowKey of Object.keys(row)) {
+      if (rowKey.toLowerCase().trim() === key.toLowerCase()) {
+        const v = row[rowKey];
+        if (v !== undefined && v !== null && String(v).trim() !== "") {
+          return String(v).trim();
+        }
+      }
+    }
+  }
+  return "";
+}
+
+function spratRowsToRopeRows(spratRows: SpratRow[]): ExtractedRopeRow[] {
+  const out: ExtractedRopeRow[] = [];
+  for (const row of spratRows) {
+    const startDate = normalizeSpratDate(getSpratField(row, "start_date"));
+    const endDate = normalizeSpratDate(getSpratField(row, "finish_date"));
+    const hoursStr = getSpratField(row, "hours_worked");
+    const minutesStr = getSpratField(row, "minutes_worked");
+    const location =
+      getSpratField(row, "location") || getSpratField(row, "company_client");
+    const skills = getSpratField(row, "work_codes");
+
+    if (!startDate || !endDate) continue;
+
+    const hoursWorked = parseFloat(hoursStr) || 0;
+    const minutesWorked = parseFloat(minutesStr) || 0;
+    const totalHours =
+      Math.round((hoursWorked + minutesWorked / 60) * 10) / 10;
+
+    if (totalHours <= 0) continue;
+
+    out.push({
+      startDate,
+      endDate,
+      location: location || "Unknown",
+      skills: skills || "",
+      hours: totalHours,
+    });
+  }
+  return out;
+}
+
+// ---- PDF-based Sprat parser ------------------------------------------------
+
+/**
+ * Extract plain text from a PDF buffer using pdf-parse.
+ * Returns an empty string on failure.
+ */
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  try {
+    // pdf-parse v2 uses a class-based API with LoadParameters
+    const { PDFParse } = await import("pdf-parse");
+    const parser = new PDFParse({ data: new Uint8Array(buffer) });
+    const result = await parser.getText();
+    return result.text ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Check whether extracted PDF text looks like a Sprat logbook export.
+ * Sprat PDFs always contain "hours_worked" and "minutes_worked" as column
+ * header tokens, and section markers of the form "-- N of M --".
+ */
+function isSpratPdfText(text: string): boolean {
+  return text.includes("hours_worked") && text.includes("minutes_worked");
+}
+
+/**
+ * The Sprat PDF renders each column as a vertical strip on its own "page".
+ * Pages are separated by "-- N of M --" markers.
+ *
+ * Expected section order (0-indexed):
+ *   0 — "start_date finish_date company_client" header + data rows
+ *   1 — "location" header + data rows
+ *   2 — "work_codes" header + data rows
+ *   3 — "Name" header + data rows          (skipped)
+ *   4 — "details" header + data rows       (skipped)
+ *   5 — "supervisor hours_worked minutes_worked status" header + data rows
+ *   6 — trailing empty section
+ */
+function parseSpratPdfText(text: string): ExtractedRopeRow[] | null {
+  // Split on "-- N of M --" section markers
+  const sections = text
+    .split(/--\s*\d+\s*of\s*\d+\s*--/i)
+    .map((s) => s.trim());
+
+  // Must have at least the dates section + hours section
+  if (sections.length < 6) return null;
+
+  // --- Section 0: dates + company -----------------------------------------
+  const dateLines = sections[0]
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  // Skip the header row (contains "start_date" literally)
+  const dateDataLines = dateLines.filter(
+    (l) => !/^\s*start_date/i.test(l),
+  );
+
+  // Each date line: "M/D/YYYY M/D/YYYY CompanyName"
+  const DATE_RE = /^(\d{1,2}\/\d{1,2}\/\d{4})\s+(\d{1,2}\/\d{1,2}\/\d{4})\s*(.*)/;
+  const parsedDates = dateDataLines.map((line) => {
+    const m = line.match(DATE_RE);
+    if (!m) return null;
+    return {
+      startDate: normalizeSpratDate(m[1]),
+      endDate: normalizeSpratDate(m[2]),
+      company: m[3].trim(),
+    };
+  });
+
+  // --- Section 1: location ------------------------------------------------
+  const locationLines = sectionDataLines(sections[1]);
+
+  // --- Section 2: work_codes ----------------------------------------------
+  const workCodeLines = sectionDataLines(sections[2]);
+
+  // --- Section 5: supervisor, hours, minutes, status ----------------------
+  const hoursSection = sections[5] ?? "";
+  const hoursDataLines = sectionDataLines(hoursSection);
+
+  // Parse "SupervisorName hours minutes status"
+  // The last token is status, before that minutes, before that hours, rest is supervisor
+  const HOURS_RE =
+    /^(.*?)\s+(\d+)\s+(\d+)\s+(\S+)\s*$/;
+  const parsedHours = hoursDataLines.map((line) => {
+    const m = line.match(HOURS_RE);
+    if (!m) return null;
+    return {
+      hoursWorked: parseInt(m[2], 10),
+      minutesWorked: parseInt(m[3], 10),
+      status: m[4],
+    };
+  });
+
+  // Zip all sections together (use date row count as authoritative length)
+  const rowCount = parsedDates.length;
+  if (rowCount === 0) return null;
+
+  const out: ExtractedRopeRow[] = [];
+  for (let i = 0; i < rowCount; i++) {
+    const dateRow = parsedDates[i];
+    if (!dateRow || !dateRow.startDate || !dateRow.endDate) continue;
+
+    const location =
+      (locationLines[i] ?? "").trim() || dateRow.company || "Unknown";
+    const skills = (workCodeLines[i] ?? "").trim();
+    const hoursRow = parsedHours[i];
+
+    const hoursWorked = hoursRow?.hoursWorked ?? 0;
+    const minutesWorked = hoursRow?.minutesWorked ?? 0;
+    const totalHours =
+      Math.round((hoursWorked + minutesWorked / 60) * 10) / 10;
+
+    if (totalHours <= 0) continue;
+
+    out.push({
+      startDate: dateRow.startDate,
+      endDate: dateRow.endDate,
+      location,
+      skills,
+      hours: totalHours,
+    });
+  }
+
+  return out.length > 0 ? out : null;
+}
+
+/** Return the data lines from a section (stripping the first header line). */
+function sectionDataLines(section: string): string[] {
+  const lines = section
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  // Drop the first line (column header)
+  return lines.slice(1);
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 export async function extractOJTRows(
   buffer: Buffer,
   contentType: string,
@@ -218,11 +496,40 @@ export async function extractRopeRows(
   contentType: string,
   filename = "upload.pdf",
 ): Promise<ExtractedRopeRow[]> {
+  // --- xlsx Sprat exports ---
+  if (isXlsxMime(contentType)) {
+    const spratRows = parseSpratXlsx(buffer);
+    if (!spratRows) {
+      throw new Error(
+        "Could not read this spreadsheet as a Sprat export. " +
+          "Make sure you upload a Sprat .xlsx logbook export.",
+      );
+    }
+    return spratRowsToRopeRows(spratRows);
+  }
+
   if (!isImageMime(contentType) && !isPdfMime(contentType)) {
     throw new Error(
-      "Unsupported file type. Please upload a PDF or image (JPG, PNG, WEBP).",
+      "Unsupported file type. Please upload a PDF, image (JPG, PNG, WEBP), or Sprat .xlsx export.",
     );
   }
+
+  // --- PDF: try Sprat deterministic path first ---
+  if (isPdfMime(contentType)) {
+    try {
+      const text = await extractPdfText(buffer);
+      if (text && isSpratPdfText(text)) {
+        const rows = parseSpratPdfText(text);
+        if (rows && rows.length > 0) {
+          return rows;
+        }
+      }
+    } catch {
+      // If Sprat PDF parsing fails for any reason, fall through to AI
+    }
+  }
+
+  // --- Fall back to AI vision extraction for non-Sprat PDFs / images ---
   const parsed = await callVisionExtraction(
     buffer,
     contentType,
