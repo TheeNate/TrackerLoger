@@ -516,16 +516,18 @@ export async function extractRopeRows(
 
   // --- PDF: try Sprat deterministic path first ---
   if (isPdfMime(contentType)) {
-    try {
-      const text = await extractPdfText(buffer);
-      if (text && isSpratPdfText(text)) {
-        const rows = parseSpratPdfText(text);
-        if (rows && rows.length > 0) {
-          return rows;
-        }
+    const text = await extractPdfText(buffer);
+    if (text && isSpratPdfText(text)) {
+      const rows = parseSpratPdfText(text);
+      if (rows && rows.length > 0) {
+        return rows;
       }
-    } catch {
-      // If Sprat PDF parsing fails for any reason, fall through to AI
+      // Detected as Sprat but parsing produced nothing — surface a clear
+      // error rather than silently calling the AI vision path.
+      throw new Error(
+        "This looks like a Sprat logbook PDF, but no rows could be parsed. " +
+          "Please export a fresh copy from Sprat and try again.",
+      );
     }
   }
 
