@@ -421,6 +421,25 @@ export function ImportLogDialog({ open, onClose, type }: ImportLogDialogProps) {
               <Badge variant="secondary">Imported document</Badge>
             </div>
 
+            {(() => {
+              const count =
+                type === "ojt"
+                  ? ojtRows.length === 1 && !ojtRows[0].date
+                    ? 0
+                    : ojtRows.length
+                  : ropeRows.length === 1 && !ropeRows[0].startDate
+                    ? 0
+                    : ropeRows.length;
+              return (
+                <p className="text-sm text-neutral-600">
+                  <span className="font-medium text-neutral-900">
+                    {count} {count === 1 ? "entry" : "entries"} found
+                  </span>{" "}
+                  — review and edit before importing
+                </p>
+              );
+            })()}
+
             {extractionError && (
               <Alert>
                 <AlertDescription>
