@@ -46,6 +46,8 @@ import {
   FormCapacityError,
   NothingToExportError,
 } from "./forms/types";
+import { handleMcpRequest, takeExport } from "./mcp/server";
+import { createHash } from "crypto";
 
 // Extend express-session types
 declare module "express-session" {
@@ -164,6 +166,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ message: "Unauthorized" });
     }
     next();
+  };
+
+  // Hash an API token using SHA-256. Tokens are 32-byte hex (64 chars), so
+  // we don't need bcrypt — a fast hash is sufficient because the token
+  // itself has 256 bits of entropy and brute-forcing the hash is hopeless.
+  const hashApiToken = (raw: string) =>
+    createHash("sha256").update(raw).digest("hex");
+
+  // Accepts either a logged-in session OR a valid bearer token. When a
+  // bearer authenticates, sets req.session.userId so all downstream
+  // handlers (which read req.session.userId!) just work.
+  const requireAuthOrToken = async (
+    req: Request,
+    res: Response,
+    next: Function,
+  ) => {
+    if (req.session.userId) {
+      return next();
+    }
+    const authHeader = req.headers.authorization || "";
+    const match = /^Bearer\s+([A-Za-z0-9_-]+)$/.exec(authHeader);
+    if (!match) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const raw = match[1];
+    if (raw.length < 16) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    try {
+      const prefix = raw.slice(0, 8);
+      const tokenHash = hashApiToken(raw);
+      const candidates = await storage.getApiTokensByPrefix(prefix);
+      const matched = candidates.find((t) => t.tokenHash === tokenHash);
+      if (!matched) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      // Surface user ID via a per-request session shim so the existing
+      // handlers (which read `req.session.userId!`) keep working WITHOUT
+      // mutating or persisting the real express-session record. This keeps
+      // bearer auth fully stateless: no Set-Cookie is issued and no
+      // cookie-session is bootstrapped from an API call.
+      const realSession = req.session;
+      (req as Request & { session: { userId?: number } }).session = {
+        ...(realSession as object),
+        userId: matched.userId,
+        // No-op save/destroy so handlers that call them on the shim don't blow up.
+        save: (cb?: (err?: unknown) => void) => cb && cb(),
+        destroy: (cb?: (err?: unknown) => void) => cb && cb(),
+      } as never;
+      // Fire-and-forget bookkeeping
+      storage.touchApiToken(matched.id).catch((e) =>
+        console.warn("touchApiToken failed:", e),
+      );
+      next();
+    } catch (error) {
+      console.error("Bearer auth error:", error);
+      return res.status(500).json({ message: "Auth error" });
+    }
   };
 
   // Admin middleware
@@ -410,7 +470,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User routes
-  app.get("/api/user", requireAuth, async (req, res) => {
+  app.get("/api/user", requireAuthOrToken, async (req, res) => {
     try {
       const user = await storage.getUser(req.session.userId!);
       if (!user) {
@@ -426,7 +486,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/user", requireAuth, async (req, res) => {
+  app.patch("/api/user", requireAuthOrToken, async (req, res) => {
     try {
       const user = await storage.getUser(req.session.userId!);
       if (!user) {
@@ -461,7 +521,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Entry routes
-  app.get("/api/entries", requireAuth, async (req, res) => {
+  app.get("/api/entries", requireAuthOrToken, async (req, res) => {
     try {
       const entries = await storage.getEntries(req.session.userId!);
       res.json(entries);
@@ -471,7 +531,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/entries", requireAuth, async (req, res) => {
+  app.post("/api/entries", requireAuthOrToken, async (req, res) => {
     try {
       const userId = req.session.userId!;
 
@@ -521,7 +581,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/entries/:id", requireAuth, async (req, res) => {
+  app.patch("/api/entries/:id", requireAuthOrToken, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const id = parseInt(req.params.id);
@@ -560,7 +620,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // For imported entries, when no other entry or rope-hour record references
   // the same source document, the underlying object-storage file is deleted
   // as well.
-  app.delete("/api/entries/:id", requireAuth, async (req, res) => {
+  app.delete("/api/entries/:id", requireAuthOrToken, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const id = parseInt(req.params.id);
@@ -607,7 +667,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Export OJT or rope-hours entries into a vendor PDF form
-  app.post("/api/export-form", requireAuth, async (req, res) => {
+  app.post("/api/export-form", requireAuthOrToken, async (req, res) => {
     const userId = req.session.userId!;
     const { form_id, entry_ids, header_overrides } = req.body ?? {};
 
@@ -711,7 +771,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Supervisor routes
-  app.get("/api/supervisors", requireAuth, async (req, res) => {
+  app.get("/api/supervisors", requireAuthOrToken, async (req, res) => {
     try {
       const supervisors = await storage.getSupervisors(req.session.userId!);
       res.json(supervisors);
@@ -721,7 +781,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/supervisors", requireAuth, async (req, res) => {
+  app.post("/api/supervisors", requireAuthOrToken, async (req, res) => {
     try {
       const supervisorData = {
         ...req.body,
@@ -744,7 +804,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/supervisors/:id", requireAuth, async (req, res) => {
+  app.patch("/api/supervisors/:id", requireAuthOrToken, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const id = parseInt(req.params.id);
@@ -767,7 +827,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/supervisors/:id", requireAuth, async (req, res) => {
+  app.delete("/api/supervisors/:id", requireAuthOrToken, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const id = parseInt(req.params.id);
@@ -785,7 +845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Rope Hours routes
-  app.get("/api/rope-hours", requireAuth, async (req, res) => {
+  app.get("/api/rope-hours", requireAuthOrToken, async (req, res) => {
     try {
       const ropeHours = await storage.getRopeHours(req.session.userId!);
       res.json(ropeHours);
@@ -795,7 +855,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/rope-hours", requireAuth, async (req, res) => {
+  app.post("/api/rope-hours", requireAuthOrToken, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const ropeHourData = {
@@ -824,7 +884,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/rope-hours/:id", requireAuth, async (req, res) => {
+  app.patch("/api/rope-hours/:id", requireAuthOrToken, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const id = parseInt(req.params.id);
@@ -863,7 +923,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete a rope-hours record. Owner-only. For imported records, the
   // underlying source document is removed when no other record references
   // it.
-  app.delete("/api/rope-hours/:id", requireAuth, async (req, res) => {
+  app.delete("/api/rope-hours/:id", requireAuthOrToken, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const id = parseInt(req.params.id);
@@ -970,7 +1030,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Verification routes for rope hours
-  app.post("/api/verify-request-rope/:ropeHourId", requireAuth, async (req, res) => {
+  app.post("/api/verify-request-rope/:ropeHourId", requireAuthOrToken, async (req, res) => {
     try {
       const { ropeHourId } = req.params;
       const userId = req.session.userId!;
@@ -1053,7 +1113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Verification routes
-  app.post("/api/verify-request/:entryId", requireAuth, async (req, res) => {
+  app.post("/api/verify-request/:entryId", requireAuthOrToken, async (req, res) => {
     try {
       const { entryId } = req.params;
       const userId = req.session.userId!;
@@ -1257,7 +1317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Batch verification request — one email, one link, multiple entries
-  app.post("/api/batch-verify-request", requireAuth, async (req, res) => {
+  app.post("/api/batch-verify-request", requireAuthOrToken, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const { entryIds, supervisorId } = req.body;
@@ -1832,6 +1892,162 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .status(500)
         .json({ message: "Error fetching source document" });
     }
+  });
+
+  // ---------- API tokens (for Claude MCP and other external clients) ----------
+  app.get("/api/tokens", requireAuth, async (req, res) => {
+    try {
+      const tokens = await storage.listApiTokens(req.session.userId!);
+      // Never return the hash itself
+      res.json(
+        tokens.map(({ tokenHash: _h, ...rest }) => rest),
+      );
+    } catch (error) {
+      console.error("List tokens error:", error);
+      res.status(500).json({ message: "Error listing tokens" });
+    }
+  });
+
+  app.post("/api/tokens", requireAuth, async (req, res) => {
+    try {
+      const name = (req.body?.name ?? "").toString().trim();
+      if (!name || name.length > 100) {
+        return res.status(400).json({ message: "Name is required (1–100 chars)" });
+      }
+      const raw = randomBytes(32).toString("hex"); // 64-char hex
+      const tokenHash = hashApiToken(raw);
+      const tokenPrefix = raw.slice(0, 8);
+      const created = await storage.createApiToken({
+        userId: req.session.userId!,
+        name,
+        tokenHash,
+        tokenPrefix,
+      });
+      // Return raw token EXACTLY ONCE.
+      const { tokenHash: _h, ...meta } = created;
+      res.status(201).json({ ...meta, token: raw });
+    } catch (error) {
+      console.error("Create token error:", error);
+      res.status(500).json({ message: "Error creating token" });
+    }
+  });
+
+  app.delete("/api/tokens/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+      const existing = await storage.getApiTokenById(id);
+      if (!existing) return res.status(404).json({ message: "Token not found" });
+      if (existing.userId !== req.session.userId!) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+      await storage.deleteApiToken(id);
+      res.json({ message: "Token revoked" });
+    } catch (error) {
+      console.error("Delete token error:", error);
+      res.status(500).json({ message: "Error deleting token" });
+    }
+  });
+
+  // ---------- Aggregate totals (useful for MCP and dashboards) ----------
+  app.get("/api/entries/totals", requireAuthOrToken, async (req, res) => {
+    try {
+      const all = await storage.getEntries(req.session.userId!);
+      const byMethod = new Map<string, { totalHours: number; verifiedHours: number; count: number }>();
+      for (const e of all) {
+        const m = byMethod.get(e.method) ?? { totalHours: 0, verifiedHours: 0, count: 0 };
+        m.totalHours += e.hours;
+        if (e.verified) m.verifiedHours += e.hours;
+        m.count += 1;
+        byMethod.set(e.method, m);
+      }
+      const totals = Array.from(byMethod.entries())
+        .map(([method, v]) => ({
+          method,
+          totalHours: Math.round(v.totalHours * 10) / 10,
+          verifiedHours: Math.round(v.verifiedHours * 10) / 10,
+          count: v.count,
+        }))
+        .sort((a, b) => b.totalHours - a.totalHours);
+      res.json({ totals });
+    } catch (error) {
+      console.error("Totals error:", error);
+      res.status(500).json({ message: "Error computing totals" });
+    }
+  });
+
+  app.get("/api/rope-hours/totals", requireAuthOrToken, async (req, res) => {
+    try {
+      const rows = await storage.getRopeHours(req.session.userId!);
+      let total = 0;
+      let verified = 0;
+      for (const r of rows) {
+        total += r.hours;
+        if (r.verified) verified += r.hours;
+      }
+      res.json({
+        totalHours: Math.round(total * 10) / 10,
+        verifiedHours: Math.round(verified * 10) / 10,
+        count: rows.length,
+      });
+    } catch (error) {
+      console.error("Rope totals error:", error);
+      res.status(500).json({ message: "Error computing rope-hour totals" });
+    }
+  });
+
+  // ---------- MCP one-shot export downloads ----------
+  // GET /api/mcp-exports/:id — returns the generated PDF once and deletes it.
+  // Unauthenticated by design because the UUID is unguessable and short-lived
+  // (15 minutes). Same trust model as object-storage signed URLs.
+  app.get("/api/mcp-exports/:id", (req, res) => {
+    const rec = takeExport(req.params.id);
+    if (!rec) {
+      return res.status(404).json({ message: "Export not found or expired" });
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${rec.filename}"`);
+    res.send(rec.bytes);
+  });
+
+  // ---------- MCP endpoint ----------
+  // Streamable HTTP transport. Bearer-token only (no cookie session) so that
+  // misconfigured CORS or third-party browser contexts can't reach it.
+  app.post("/mcp", async (req, res) => {
+    const authHeader = req.headers.authorization || "";
+    const match = /^Bearer\s+([A-Za-z0-9_-]+)$/.exec(authHeader);
+    if (!match || match[1].length < 16) {
+      res.status(401).json({ error: "missing or invalid bearer token" });
+      return;
+    }
+    const raw = match[1];
+    try {
+      const prefix = raw.slice(0, 8);
+      const tokenHash = hashApiToken(raw);
+      const candidates = await storage.getApiTokensByPrefix(prefix);
+      const matched = candidates.find((t) => t.tokenHash === tokenHash);
+      if (!matched) {
+        res.status(401).json({ error: "invalid bearer token" });
+        return;
+      }
+      storage.touchApiToken(matched.id).catch(() => {});
+      await handleMcpRequest(
+        Object.assign(req, { userId: matched.userId }),
+        res,
+      );
+    } catch (error) {
+      console.error("/mcp auth error:", error);
+      if (!res.headersSent) res.status(500).json({ error: "internal" });
+    }
+  });
+
+  // MCP clients sometimes probe with GET/DELETE for SSE/session ops.
+  // Stateless mode rejects them; reply with a clear error.
+  app.get("/mcp", (_req, res) => {
+    res.status(405).json({ error: "Method Not Allowed (stateless transport, use POST)" });
+  });
+  app.delete("/mcp", (_req, res) => {
+    res.status(405).json({ error: "Method Not Allowed (stateless transport)" });
   });
 
   // Call setup admin function

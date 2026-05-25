@@ -1,10 +1,11 @@
 import { 
-  users, entries, supervisors, ropeHours, userCryptoIdentities,
+  users, entries, supervisors, ropeHours, userCryptoIdentities, apiTokens,
   type User, type InsertUser, 
   type Entry, type InsertEntry,
   type Supervisor, type InsertSupervisor,
   type RopeHours, type InsertRopeHours,
-  type UserCryptoIdentity, type InsertUserCryptoIdentity
+  type UserCryptoIdentity, type InsertUserCryptoIdentity,
+  type ApiToken, type InsertApiToken
 } from "@shared/schema";
 
 import { db } from "./db";
@@ -76,6 +77,14 @@ export interface IStorage {
   // Crypto Identity methods
   getUserCryptoIdentity(userId: number): Promise<UserCryptoIdentity | undefined>;
   createUserCryptoIdentity(cryptoIdentity: InsertUserCryptoIdentity): Promise<UserCryptoIdentity>;
+
+  // API Token methods (for external integrations like Claude MCP)
+  listApiTokens(userId: number): Promise<ApiToken[]>;
+  getApiTokenById(id: number): Promise<ApiToken | undefined>;
+  getApiTokensByPrefix(prefix: string): Promise<ApiToken[]>;
+  createApiToken(token: InsertApiToken): Promise<ApiToken>;
+  touchApiToken(id: number): Promise<void>;
+  deleteApiToken(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -400,6 +409,40 @@ export class DatabaseStorage implements IStorage {
       .values(cryptoIdentity)
       .returning();
     return newCryptoIdentity;
+  }
+
+  // API Token methods
+  async listApiTokens(userId: number): Promise<ApiToken[]> {
+    return await db
+      .select()
+      .from(apiTokens)
+      .where(eq(apiTokens.userId, userId))
+      .orderBy(desc(apiTokens.createdAt));
+  }
+
+  async getApiTokenById(id: number): Promise<ApiToken | undefined> {
+    const [tok] = await db.select().from(apiTokens).where(eq(apiTokens.id, id));
+    return tok;
+  }
+
+  async getApiTokensByPrefix(prefix: string): Promise<ApiToken[]> {
+    return await db.select().from(apiTokens).where(eq(apiTokens.tokenPrefix, prefix));
+  }
+
+  async createApiToken(token: InsertApiToken): Promise<ApiToken> {
+    const [created] = await db.insert(apiTokens).values(token).returning();
+    return created;
+  }
+
+  async touchApiToken(id: number): Promise<void> {
+    await db
+      .update(apiTokens)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(apiTokens.id, id));
+  }
+
+  async deleteApiToken(id: number): Promise<void> {
+    await db.delete(apiTokens).where(eq(apiTokens.id, id));
   }
 }
 

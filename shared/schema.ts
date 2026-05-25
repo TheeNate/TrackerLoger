@@ -132,6 +132,27 @@ export const insertRopeHoursSchema = createInsertSchema(ropeHours).pick({
   maxHeight: true,
 });
 
+// API Tokens for external integrations (e.g. Claude MCP)
+export const apiTokens = pgTable("api_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  tokenPrefix: text("token_prefix").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  lastUsedAt: timestamp("last_used_at"),
+});
+
+export const insertApiTokenSchema = createInsertSchema(apiTokens).pick({
+  userId: true,
+  name: true,
+  tokenHash: true,
+  tokenPrefix: true,
+});
+
+export type ApiToken = typeof apiTokens.$inferSelect;
+export type InsertApiToken = z.infer<typeof insertApiTokenSchema>;
+
 // User Crypto Identities - for technicians
 export const userCryptoIdentities = pgTable("user_crypto_identities", {
   id: serial("id").primaryKey(),

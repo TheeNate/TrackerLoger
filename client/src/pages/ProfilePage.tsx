@@ -9,6 +9,7 @@ import { SupervisorVerifyModal } from "@/components/SupervisorVerifyModal";
 import { EmailSentModal } from "@/components/EmailSentModal";
 import { EditEntryDialog } from "@/components/EditEntryDialog";
 import { ImportLogDialog } from "@/components/ImportLogDialog";
+import { ApiTokensCard } from "@/components/ApiTokensCard";
 import { Button } from "@/components/ui/button";
 import { Upload } from "lucide-react";
 import { Entry, User } from "@shared/schema";
@@ -119,7 +120,9 @@ export default function ProfilePage() {
           onEditEntry={setEditingEntry}
         />
 
-        <div className="bg-white rounded-lg shadow-sm p-6">
+        <ApiTokensCard />
+
+        <div className="bg-white rounded-lg shadow-sm p-6 mt-6">
           <div className="text-sm text-neutral-500 mb-6">
             <p>The above is true and accurate to the best of my knowledge.</p>
           </div>
