@@ -81,6 +81,26 @@ async function runMigrations() {
         ALTER COLUMN certification_level DROP NOT NULL,
         ALTER COLUMN company DROP NOT NULL;
     `);
+    // api_tokens: bearer tokens for Claude MCP and other external clients.
+    // tokenPrefix is the first 8 chars of the raw token, used for fast lookup;
+    // tokenHash is sha256(rawToken). Raw tokens are 32-byte (64-hex) random.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS api_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        name TEXT NOT NULL,
+        token_hash TEXT NOT NULL,
+        token_prefix TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        last_used_at TIMESTAMP
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS api_tokens_prefix_idx ON api_tokens(token_prefix);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS api_tokens_user_idx ON api_tokens(user_id);
+    `);
     log("Database migrations applied successfully");
   } catch (err) {
     log(`Migration error: ${err}`);
