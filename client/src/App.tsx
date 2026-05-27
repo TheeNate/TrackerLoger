@@ -4,6 +4,7 @@ import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
+import { ThemeProvider } from "@/hooks/use-theme";
 import { createIDBPersister } from "@/lib/offline";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
@@ -77,13 +78,15 @@ function App() {
         });
       }}
     >
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-          <AuthedPrompts />
-        </TooltipProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+            <AuthedPrompts />
+          </TooltipProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </PersistQueryClientProvider>
   );
 }

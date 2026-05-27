@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { generatePdf } from "@/lib/pdf";
 import { ConnectivityChip } from "@/components/ConnectivityChip";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useOnlineStatus } from "@/lib/offline/online";
 
 interface ProfileHeaderProps {
@@ -103,19 +104,20 @@ export function ProfileHeader({ user, verifiedEntries }: ProfileHeaderProps) {
 
   return (
     <>
-      <header className="bg-white shadow-sm border-b border-neutral-200">
+      <header className="bg-card shadow-sm border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-neutral-900">
+            <h1 className="text-xl font-semibold text-foreground">
               Hours Tracker
             </h1>
             <ConnectivityChip />
           </div>
 
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-neutral-500 hidden sm:inline">
+          <div className="flex items-center space-x-3">
+            <span className="text-sm text-muted-foreground hidden sm:inline">
               {user.email}
             </span>
+            <ThemeToggle />
             <button
               onClick={handleLogout}
               className="text-sm text-primary hover:text-primary/80 focus:outline-none"
