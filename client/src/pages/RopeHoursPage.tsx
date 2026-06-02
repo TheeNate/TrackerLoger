@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { Calendar, Clock, MapPin, Cable, User, Pencil, Upload, FileText, Trash2, CloudOff, AlertTriangle, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -63,6 +64,7 @@ export default function RopeHoursPage() {
   };
   const { toast } = useToast();
   const online = useOnlineStatus();
+  const [, navigate] = useLocation();
 
   const createMutation = useMutation<
     unknown,
@@ -683,7 +685,7 @@ export default function RopeHoursPage() {
                           {renderDeleteButton(entry, true)}
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap justify-end">
                           <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-sm">
                             Pending
                           </span>
@@ -699,12 +701,15 @@ export default function RopeHoursPage() {
                               <Pencil className="h-4 w-4" />
                             </Button>
                           )}
-                          {supervisors.length > 0 && (
+                          {supervisors.length > 0 ? (
                             <Select
                               disabled={!online}
                               onValueChange={(value) => handleVerifyRequest(entry.id, parseInt(value))}
                             >
-                              <SelectTrigger className="w-48" title={online ? "" : "Verification requires internet"}>
+                              <SelectTrigger
+                                className="w-full sm:w-48"
+                                title={online ? "" : "Verification requires internet"}
+                              >
                                 <SelectValue placeholder={online ? "Request Verification" : "Verify (online only)"} />
                               </SelectTrigger>
                               <SelectContent>
@@ -715,6 +720,23 @@ export default function RopeHoursPage() {
                                 ))}
                               </SelectContent>
                             </Select>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                toast({
+                                  title: "Add a signer first",
+                                  description:
+                                    "Add a supervisor on the Signers page, then request verification.",
+                                });
+                                navigate("/signers");
+                              }}
+                              title="Add a signer to request verification"
+                            >
+                              Request Verification
+                            </Button>
                           )}
                           {renderDeleteButton(entry, false)}
                         </div>

@@ -68,6 +68,12 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    /* iOS: stop fixed-width content from making the page wider than the
+       viewport, which makes vertical scrolling feel broken, and keep
+       momentum scrolling + stable text sizing. */
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    -webkit-text-size-adjust: 100%;
   }
   
   /* Custom styles for OJT table */
