@@ -48,6 +48,11 @@ import {
   NothingToExportError,
 } from "./forms/types";
 import { handleMcpRequest, takeExport } from "./mcp/server";
+import { registerOauthRoutes } from "./oauth/routes";
+import {
+  getValidAccessTokenByRaw as getOauthAccessTokenByRaw,
+  touchAccessToken as touchOauthAccessToken,
+} from "./oauth/store";
 import { createHash } from "crypto";
 
 // Extend express-session types
@@ -2013,29 +2018,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.send(rec.bytes);
   });
 
+  // ---------- OAuth 2.0 for MCP clients (claude.ai web, Cowork) ----------
+  registerOauthRoutes(app);
+
   // ---------- MCP endpoint ----------
-  // Streamable HTTP transport. Bearer-token only (no cookie session) so that
-  // misconfigured CORS or third-party browser contexts can't reach it.
+  // Streamable HTTP transport. Accepts EITHER:
+  //   (a) a legacy API token (Claude Code path) — sha256-hashed in api_tokens
+  //   (b) an OAuth 2.0 access token (claude.ai web / Cowork path) — issued via
+  //       the /oauth/* flow and stored hashed in oauth_access_tokens.
+  // On 401, advertises the OAuth resource-metadata URL so MCP-compliant
+  // clients can discover OAuth and initiate the auth-code+PKCE flow.
+  const send401 = (res: Response, error: string, description?: string) => {
+    const base = getBaseUrl();
+    const wwwAuth = [
+      'Bearer realm="mcp"',
+      `resource_metadata="${base}/.well-known/oauth-protected-resource"`,
+      `error="${error}"`,
+      description ? `error_description="${description}"` : null,
+    ]
+      .filter(Boolean)
+      .join(", ");
+    res.setHeader("WWW-Authenticate", wwwAuth);
+    res.status(401).json({ error, error_description: description });
+  };
+
   app.post("/mcp", async (req, res) => {
     const authHeader = req.headers.authorization || "";
     const match = /^Bearer\s+([A-Za-z0-9_-]+)$/.exec(authHeader);
     if (!match || match[1].length < 16) {
-      res.status(401).json({ error: "missing or invalid bearer token" });
-      return;
+      return send401(res, "invalid_token", "missing or malformed bearer token");
     }
     const raw = match[1];
     try {
+      // Try legacy API token first (Claude Code path; existing tests cover it).
       const prefix = raw.slice(0, 8);
       const tokenHash = hashApiToken(raw);
       const candidates = await storage.getApiTokensByPrefix(prefix);
       const matched = candidates.find((t) => t.tokenHash === tokenHash);
-      if (!matched) {
-        res.status(401).json({ error: "invalid bearer token" });
+      if (matched) {
+        storage.touchApiToken(matched.id).catch(() => {});
+        await handleMcpRequest(
+          Object.assign(req, { userId: matched.userId }),
+          res,
+        );
         return;
       }
-      storage.touchApiToken(matched.id).catch(() => {});
+      // Fall back to OAuth access token (claude.ai web / Cowork path).
+      const oauthRow = await getOauthAccessTokenByRaw(raw);
+      if (!oauthRow) {
+        return send401(res, "invalid_token", "bearer token not recognized");
+      }
+      touchOauthAccessToken(oauthRow.id).catch(() => {});
       await handleMcpRequest(
-        Object.assign(req, { userId: matched.userId }),
+        Object.assign(req, { userId: oauthRow.userId }),
         res,
       );
     } catch (error) {

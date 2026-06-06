@@ -214,6 +214,54 @@ export const insertApiTokenSchema = createInsertSchema(apiTokens).pick({
 export type ApiToken = typeof apiTokens.$inferSelect;
 export type InsertApiToken = z.infer<typeof insertApiTokenSchema>;
 
+// ---------------- OAuth 2.0 (for MCP clients like claude.ai web / Cowork) ----
+// Public clients registered via Dynamic Client Registration (RFC 7591).
+// No client_secret — MCP clients use Authorization Code + PKCE.
+export const oauthClients = pgTable("oauth_clients", {
+  id: serial("id").primaryKey(),
+  clientId: text("client_id").notNull().unique(),
+  clientName: text("client_name").notNull(),
+  redirectUris: text("redirect_uris").array().notNull().default(sql`'{}'::text[]`),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Short-lived authorization codes (single-use, ~5min TTL). Stores the PKCE
+// code_challenge so the token endpoint can verify the code_verifier.
+export const oauthAuthorizationCodes = pgTable("oauth_authorization_codes", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  clientId: text("client_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  codeChallengeMethod: text("code_challenge_method").notNull(),
+  scope: text("scope"),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Access + refresh tokens. Hashed at rest (sha256 of the raw token).
+export const oauthAccessTokens = pgTable("oauth_access_tokens", {
+  id: serial("id").primaryKey(),
+  tokenHash: text("token_hash").notNull().unique(),
+  tokenPrefix: text("token_prefix").notNull(),
+  refreshTokenHash: text("refresh_token_hash"),
+  refreshTokenPrefix: text("refresh_token_prefix"),
+  clientId: text("client_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  scope: text("scope"),
+  expiresAt: timestamp("expires_at").notNull(),
+  refreshExpiresAt: timestamp("refresh_expires_at"),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  lastUsedAt: timestamp("last_used_at"),
+});
+
+export type OauthClient = typeof oauthClients.$inferSelect;
+export type OauthAuthorizationCode = typeof oauthAuthorizationCodes.$inferSelect;
+export type OauthAccessToken = typeof oauthAccessTokens.$inferSelect;
+
 // User Crypto Identities - for technicians
 export const userCryptoIdentities = pgTable("user_crypto_identities", {
   id: serial("id").primaryKey(),

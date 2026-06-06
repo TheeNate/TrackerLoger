@@ -17,9 +17,16 @@ export default function AuthPage() {
     retry: false,
   });
   
-  // Redirect to appropriate page if already logged in
+  // Redirect to appropriate page if already logged in. Honors ?next= for
+  // OAuth flows that bounce through login (same-origin paths only).
   useEffect(() => {
     if (user && !isLoading) {
+      const params = new URLSearchParams(window.location.search);
+      const next = params.get("next");
+      if (next && next.startsWith("/") && !next.startsWith("//")) {
+        window.location.replace(next);
+        return;
+      }
       if ((user as any).isAdmin) {
         setLocation("/admin");
       } else {

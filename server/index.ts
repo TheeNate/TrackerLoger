@@ -101,6 +101,57 @@ async function runMigrations() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS api_tokens_user_idx ON api_tokens(user_id);
     `);
+    // OAuth 2.0 tables for MCP clients (claude.ai web, Cowork).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS oauth_clients (
+        id SERIAL PRIMARY KEY,
+        client_id TEXT NOT NULL UNIQUE,
+        client_name TEXT NOT NULL,
+        redirect_uris TEXT[] NOT NULL DEFAULT '{}'::text[],
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
+        id SERIAL PRIMARY KEY,
+        code TEXT NOT NULL UNIQUE,
+        client_id TEXT NOT NULL,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        redirect_uri TEXT NOT NULL,
+        code_challenge TEXT NOT NULL,
+        code_challenge_method TEXT NOT NULL,
+        scope TEXT,
+        expires_at TIMESTAMP NOT NULL,
+        used_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS oauth_auth_codes_code_idx ON oauth_authorization_codes(code);
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS oauth_access_tokens (
+        id SERIAL PRIMARY KEY,
+        token_hash TEXT NOT NULL UNIQUE,
+        token_prefix TEXT NOT NULL,
+        refresh_token_hash TEXT,
+        refresh_token_prefix TEXT,
+        client_id TEXT NOT NULL,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        scope TEXT,
+        expires_at TIMESTAMP NOT NULL,
+        refresh_expires_at TIMESTAMP,
+        revoked_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        last_used_at TIMESTAMP
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS oauth_access_tokens_prefix_idx ON oauth_access_tokens(token_prefix);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS oauth_access_tokens_refresh_prefix_idx ON oauth_access_tokens(refresh_token_prefix);
+    `);
     log("Database migrations applied successfully");
   } catch (err) {
     log(`Migration error: ${err}`);
