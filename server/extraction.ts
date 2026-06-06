@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { NDTMethods, type NDTMethod } from "@shared/schema";
 
 const VALID_METHODS = Object.keys(NDTMethods) as NDTMethod[];
@@ -255,33 +255,49 @@ const SPRAT_REQUIRED_COLUMNS = new Set([
  * Try to parse an xlsx buffer as a Sprat export.
  * Returns null if the file does not look like a Sprat export.
  */
-function parseSpratXlsx(buffer: Buffer): SpratRow[] | null {
-  let workbook: XLSX.WorkBook;
+async function parseSpratXlsx(buffer: Buffer): Promise<SpratRow[] | null> {
+  const workbook = new ExcelJS.Workbook();
   try {
-    workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+    await workbook.xlsx.load(buffer);
   } catch {
     return null;
   }
 
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) return null;
+  const sheet = workbook.worksheets[0];
+  if (!sheet) return null;
 
-  const sheet = workbook.Sheets[sheetName];
-  const rawRows = XLSX.utils.sheet_to_json<SpratRow>(sheet, {
-    defval: "",
-    raw: false,
+  const rows: SpratRow[] = [];
+  let headers: string[] = [];
+
+  sheet.eachRow((row, rowNumber) => {
+    const values = (row.values as (ExcelJS.CellValue | null | undefined)[]).slice(1);
+    if (rowNumber === 1) {
+      headers = values.map((v) => (v !== null && v !== undefined ? String(v) : ""));
+    } else {
+      if (values.every((v) => v === null || v === undefined || String(v).trim() === "")) return;
+      const obj: SpratRow = {};
+      headers.forEach((h, i) => {
+        const val = values[i];
+        if (val instanceof Date) {
+          obj[h] = val.toISOString().slice(0, 10);
+        } else {
+          obj[h] = val !== null && val !== undefined ? String(val) : "";
+        }
+      });
+      rows.push(obj);
+    }
   });
 
-  if (rawRows.length === 0) return null;
+  if (rows.length === 0) return null;
 
   const firstKeys = new Set(
-    Object.keys(rawRows[0]).map((k) => k.toLowerCase().trim()),
+    Object.keys(rows[0]).map((k) => k.toLowerCase().trim()),
   );
   for (const col of SPRAT_REQUIRED_COLUMNS) {
     if (!firstKeys.has(col)) return null;
   }
 
-  return rawRows;
+  return rows;
 }
 
 function getSpratField(row: SpratRow, ...keys: string[]): string {
@@ -498,7 +514,7 @@ export async function extractRopeRows(
 ): Promise<ExtractedRopeRow[]> {
   // --- xlsx Sprat exports ---
   if (isXlsxMime(contentType)) {
-    const spratRows = parseSpratXlsx(buffer);
+    const spratRows = await parseSpratXlsx(buffer);
     if (!spratRows) {
       throw new Error(
         "Could not read this spreadsheet as a Sprat export. " +
