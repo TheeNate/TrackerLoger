@@ -20,6 +20,7 @@ import SuccessPage from "@/pages/SuccessPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NewPasswordPage from "@/pages/NewPasswordPage";
 import AdminPage from "@/pages/AdminPage";
+import SkillzPage from "@/pages/SkillzPage";
 import { ProtectedRoute } from "@/lib/protected-route";
 
 const persister = createIDBPersister();
@@ -52,6 +53,7 @@ function Router() {
       <Route path="/verify/:token" component={VerifyPage} />
       <Route path="/batch-verify/:token" component={BatchVerifyPage} />
       <Route path="/success" component={SuccessPage} />
+      <Route path="/skillz" component={SkillzPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/reset-password/:token" component={NewPasswordPage} />
       <Route component={NotFound} />

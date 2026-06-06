@@ -165,6 +165,13 @@ export function ApiTokensCard() {
             Once connected, Claude can list and log OJT hours, manage supervisors, request verification
             emails, and generate vendor PDF forms — all on your behalf.
           </p>
+          <p>
+            Need the full walkthrough (including a copy-paste skill)? See the{" "}
+            <a href="/skillz" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-medium">
+              Skillz onboarding page
+            </a>
+            .
+          </p>
         </div>
       </details>
 
