@@ -3,6 +3,60 @@ import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Enum of NDT methods
+export const NDTMethods = {
+  ET: "ET",
+  RFT: "RFT",
+  MT: "MT",
+  PT: "PT",
+  RT: "RT",
+  UT_THK: "UT_THK",
+  UTSW: "UTSW",
+  PMI: "PMI",
+  LSI: "LSI",
+  // Added 2026-05-19 for vendor-form support
+  PAUT: "PAUT",
+  VT_1: "VT_1",
+  VT_2: "VT_2",
+  VT_3: "VT_3",
+  VWE: "VWE",
+  UT: "UT",
+} as const;
+
+export type NDTMethod = keyof typeof NDTMethods;
+
+// Certification levels a signer can hold
+export const CERTIFICATION_LEVELS = ["Level I", "Level II", "Level III"] as const;
+
+// A single method+level qualification a signer holds (e.g. UT Level III)
+export const supervisorQualificationSchema = z.object({
+  method: z.enum(Object.keys(NDTMethods) as [string, ...string[]]),
+  level: z.enum(CERTIFICATION_LEVELS),
+});
+
+export type SupervisorQualification = z.infer<typeof supervisorQualificationSchema>;
+
+// Keep the legacy single ndtMethod/certificationLevel columns in sync with the
+// qualifications list so older readers (emails, PDF adapters) keep working.
+// Only touches legacy fields when `qualifications` is present in the write;
+// an empty array clears them. Partial writes without qualifications are left
+// untouched.
+export function canonicalizeSupervisorWrite<
+  T extends {
+    qualifications?: SupervisorQualification[] | null;
+    ndtMethod?: string | null;
+    certificationLevel?: string | null;
+  },
+>(data: T): T {
+  if (data.qualifications === undefined) return data;
+  const first = data.qualifications?.[0];
+  return {
+    ...data,
+    ndtMethod: first?.method ?? null,
+    certificationLevel: first?.level ?? null,
+  };
+}
+
 // User model with password auth
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -72,20 +126,27 @@ export const supervisors = pgTable("supervisors", {
   spratNumber: text("sprat_number"),
   irataNumber: text("irata_number"),
   ndtMethod: text("ndt_method"),
+  // A signer can hold multiple method+level qualifications (e.g. UT III, PT II).
+  // Legacy ndtMethod/certificationLevel are kept for backward compatibility.
+  qualifications: json("qualifications").$type<SupervisorQualification[]>(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertSupervisorSchema = createInsertSchema(supervisors).pick({
-  userId: true,
-  name: true,
-  email: true,
-  phone: true,
-  certificationLevel: true,
-  company: true,
-  spratNumber: true,
-  irataNumber: true,
-  ndtMethod: true,
-});
+export const insertSupervisorSchema = createInsertSchema(supervisors)
+  .pick({
+    userId: true,
+    name: true,
+    email: true,
+    phone: true,
+    certificationLevel: true,
+    company: true,
+    spratNumber: true,
+    irataNumber: true,
+    ndtMethod: true,
+  })
+  .extend({
+    qualifications: z.array(supervisorQualificationSchema).optional(),
+  });
 
 // Rope Hours model
 export const ropeHours = pgTable("rope_hours", {
@@ -213,25 +274,3 @@ export type InsertUserCryptoIdentity = z.infer<typeof insertUserCryptoIdentitySc
 
 export type SupervisorCryptoIdentity = typeof supervisorCryptoIdentities.$inferSelect;
 export type InsertSupervisorCryptoIdentity = z.infer<typeof insertSupervisorCryptoIdentitySchema>;
-
-// Enum of NDT methods
-export const NDTMethods = {
-  ET: "ET",
-  RFT: "RFT",
-  MT: "MT",
-  PT: "PT",
-  RT: "RT",
-  UT_THK: "UT_THK",
-  UTSW: "UTSW",
-  PMI: "PMI",
-  LSI: "LSI",
-  // Added 2026-05-19 for vendor-form support
-  PAUT: "PAUT",
-  VT_1: "VT_1",
-  VT_2: "VT_2",
-  VT_3: "VT_3",
-  VWE: "VWE",
-  UT: "UT",
-} as const;
-
-export type NDTMethod = keyof typeof NDTMethods;

@@ -27,6 +27,7 @@ import {
   insertSupervisorSchema,
   insertUserSchema,
   insertRopeHoursSchema,
+  canonicalizeSupervisorWrite,
   NDTMethods,
 } from "@shared/schema";
 import { z } from "zod";
@@ -788,7 +789,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: req.session.userId!,
       };
 
-      const parsedData = insertSupervisorSchema.parse(supervisorData);
+      const parsedData = canonicalizeSupervisorWrite(
+        insertSupervisorSchema.parse(supervisorData),
+      );
       const newSupervisor = await storage.createSupervisor(parsedData);
 
       res.status(201).json(newSupervisor);
@@ -814,7 +817,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existing.userId !== userId) return res.status(403).json({ message: "Unauthorized" });
 
       const updateSchema = insertSupervisorSchema.omit({ userId: true }).partial();
-      const parsedData = updateSchema.parse(req.body);
+      const parsedData = canonicalizeSupervisorWrite(updateSchema.parse(req.body));
 
       const updated = await storage.updateSupervisor(id, parsedData);
       res.json(updated);

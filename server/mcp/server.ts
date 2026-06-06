@@ -19,6 +19,8 @@ import {
   insertEntrySchema,
   insertRopeHoursSchema,
   insertSupervisorSchema,
+  supervisorQualificationSchema,
+  canonicalizeSupervisorWrite,
   NDTMethods,
   type Entry,
   type RopeHours,
@@ -351,9 +353,13 @@ function buildServer(userId: number): McpServer {
       spratNumber: z.string().optional(),
       irataNumber: z.string().optional(),
       ndtMethod: z.string().optional(),
+      qualifications: z.array(supervisorQualificationSchema).optional()
+        .describe("List of method+level qualifications, e.g. [{ method: 'UT', level: 'Level III' }]"),
     },
     async (input) => {
-      const parsed = insertSupervisorSchema.parse({ ...input, userId });
+      const parsed = canonicalizeSupervisorWrite(
+        insertSupervisorSchema.parse({ ...input, userId }),
+      );
       const created = await storage.createSupervisor(parsed);
       return ok(`Added supervisor ${created.name} <${created.email}> (id ${created.id}).`, { supervisor: created });
     },
@@ -372,6 +378,8 @@ function buildServer(userId: number): McpServer {
       spratNumber: z.string().optional(),
       irataNumber: z.string().optional(),
       ndtMethod: z.string().optional(),
+      qualifications: z.array(supervisorQualificationSchema).optional()
+        .describe("List of method+level qualifications, e.g. [{ method: 'UT', level: 'Level III' }]"),
     },
     async ({ id, ...rest }) => {
       const existing = await storage.getSupervisor(id);
@@ -381,7 +389,8 @@ function buildServer(userId: number): McpServer {
       for (const [k, v] of Object.entries(rest)) {
         if (v !== undefined) updates[k] = v;
       }
-      const updated = await storage.updateSupervisor(id, updates as never);
+      const canonical = canonicalizeSupervisorWrite(updates as never);
+      const updated = await storage.updateSupervisor(id, canonical as never);
       return ok(`Updated supervisor ${id}.`, { supervisor: updated });
     },
   );

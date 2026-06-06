@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Entry, Supervisor } from "@shared/schema";
-import { supervisorFormSchema, type SupervisorFormValues } from "@/types";
+import { supervisorFormSchema, signerToQualifications, type SupervisorFormValues } from "@/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Check, Copy } from "lucide-react";
 import { SignerFormFields } from "@/components/SignerFormFields";
@@ -37,11 +37,10 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
       name: "",
       email: "",
       phone: "",
-      certificationLevel: "",
       company: "",
       spratNumber: "",
       irataNumber: "",
-      ndtMethod: "",
+      qualifications: [],
     },
   });
 
@@ -76,11 +75,10 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
         form.setValue("name", supervisor.name);
         form.setValue("email", supervisor.email);
         form.setValue("phone", supervisor.phone);
-        form.setValue("certificationLevel", supervisor.certificationLevel ?? "");
         form.setValue("company", supervisor.company ?? "");
         form.setValue("spratNumber", supervisor.spratNumber ?? "");
         form.setValue("irataNumber", supervisor.irataNumber ?? "");
-        form.setValue("ndtMethod", supervisor.ndtMethod ?? "");
+        form.setValue("qualifications", signerToQualifications(supervisor));
       }
     }
   };
@@ -111,9 +109,8 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
           ...values,
           spratNumber: values.spratNumber || null,
           irataNumber: values.irataNumber || null,
-          ndtMethod: values.ndtMethod || null,
-          certificationLevel: values.certificationLevel || null,
           company: values.company || null,
+          qualifications: values.qualifications,
         };
         const supervisorResponse = await apiRequest("POST", "/api/supervisors", payload);
         if (!supervisorResponse.ok) throw new Error("Failed to create supervisor");

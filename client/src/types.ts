@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NDTMethods } from "@shared/schema";
+import { NDTMethods, supervisorQualificationSchema, type Supervisor, type SupervisorQualification } from "@shared/schema";
 
 // Entry form validation schema
 export const entryFormSchema = z.object({
@@ -28,12 +28,28 @@ export const supervisorFormSchema = z.object({
   phone: z.string().min(1, "Phone number is required"),
   spratNumber: z.string().optional(),
   irataNumber: z.string().optional(),
-  ndtMethod: z.string().optional(),
-  certificationLevel: z.string().optional(),
   company: z.string().optional(),
+  qualifications: z.array(supervisorQualificationSchema),
 });
 
 export type SupervisorFormValues = z.infer<typeof supervisorFormSchema>;
+
+// Build the qualifications list for a saved signer, falling back to the
+// legacy single ndtMethod/certificationLevel fields when present.
+export function signerToQualifications(signer: Supervisor): SupervisorQualification[] {
+  if (Array.isArray(signer.qualifications) && signer.qualifications.length > 0) {
+    return signer.qualifications;
+  }
+  if (signer.ndtMethod && signer.certificationLevel) {
+    return [
+      {
+        method: signer.ndtMethod,
+        level: signer.certificationLevel,
+      } as SupervisorQualification,
+    ];
+  }
+  return [];
+}
 
 // Authentication form validation schemas
 export const loginFormSchema = z.object({

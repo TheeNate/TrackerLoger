@@ -28,7 +28,7 @@ import { ProfileHeader } from "@/components/ProfileHeader";
 import { SignerFormFields } from "@/components/SignerFormFields";
 import { Pencil, Trash2, UserPlus, UserCheck } from "lucide-react";
 import { Supervisor, User, Entry } from "@shared/schema";
-import { supervisorFormSchema, type SupervisorFormValues } from "@/types";
+import { supervisorFormSchema, signerToQualifications, type SupervisorFormValues } from "@/types";
 
 const emptyValues: SupervisorFormValues = {
   name: "",
@@ -36,9 +36,8 @@ const emptyValues: SupervisorFormValues = {
   phone: "",
   spratNumber: "",
   irataNumber: "",
-  ndtMethod: "",
-  certificationLevel: "",
   company: "",
+  qualifications: [],
 };
 
 export default function SignersPage() {
@@ -78,9 +77,8 @@ export default function SignersPage() {
       phone: signer.phone,
       spratNumber: signer.spratNumber ?? "",
       irataNumber: signer.irataNumber ?? "",
-      ndtMethod: signer.ndtMethod ?? "",
-      certificationLevel: signer.certificationLevel ?? "",
       company: signer.company ?? "",
+      qualifications: signerToQualifications(signer),
     });
     setIsFormOpen(true);
   };
@@ -91,9 +89,8 @@ export default function SignersPage() {
         ...values,
         spratNumber: values.spratNumber || null,
         irataNumber: values.irataNumber || null,
-        ndtMethod: values.ndtMethod || null,
-        certificationLevel: values.certificationLevel || null,
         company: values.company || null,
+        qualifications: values.qualifications,
       };
 
       if (editing) {
@@ -139,7 +136,9 @@ export default function SignersPage() {
 
   if (!user) return null;
 
-  const formatMethod = (m: string | null) => (!m ? "—" : m === "UT_THK" ? "UT Thk." : m);
+  const formatMethod = (m: string) => (m === "UT_THK" ? "UT Thk." : m);
+  const shortLevel = (lvl: string) =>
+    lvl === "Level I" ? "I" : lvl === "Level II" ? "II" : lvl === "Level III" ? "III" : lvl;
 
   return (
     <div className="min-h-screen bg-neutral-100">
@@ -184,8 +183,7 @@ export default function SignersPage() {
                     <th className="px-3 py-3">Email</th>
                     <th className="px-3 py-3">SPRAT #</th>
                     <th className="px-3 py-3">IRATA #</th>
-                    <th className="px-3 py-3">NDT Method</th>
-                    <th className="px-3 py-3">Level</th>
+                    <th className="px-3 py-3">Qualifications</th>
                     <th className="px-3 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -197,8 +195,24 @@ export default function SignersPage() {
                       <td className="px-3 py-3">{signer.email}</td>
                       <td className="px-3 py-3">{signer.spratNumber || "—"}</td>
                       <td className="px-3 py-3">{signer.irataNumber || "—"}</td>
-                      <td className="px-3 py-3">{formatMethod(signer.ndtMethod)}</td>
-                      <td className="px-3 py-3">{signer.certificationLevel || "—"}</td>
+                      <td className="px-3 py-3">
+                        {(() => {
+                          const quals = signerToQualifications(signer);
+                          if (quals.length === 0) return "—";
+                          return (
+                            <div className="flex flex-wrap gap-1">
+                              {quals.map((q, i) => (
+                                <span
+                                  key={`${q.method}-${q.level}-${i}`}
+                                  className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700"
+                                >
+                                  {formatMethod(q.method)} {shortLevel(q.level)}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="px-3 py-3 text-right">
                         <div className="flex justify-end gap-1">
                           <Button
