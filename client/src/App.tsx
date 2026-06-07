@@ -16,6 +16,7 @@ import RopeHoursPage from "@/pages/RopeHoursPage";
 import SignersPage from "@/pages/SignersPage";
 import VerifyPage from "@/pages/VerifyPage";
 import BatchVerifyPage from "@/pages/BatchVerifyPage";
+import PublicProfilePage from "@/pages/PublicProfilePage";
 import SuccessPage from "@/pages/SuccessPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NewPasswordPage from "@/pages/NewPasswordPage";
@@ -50,6 +51,7 @@ function Router() {
           <AdminPage />
         </ProtectedRoute>
       </Route>
+      <Route path="/p/:token" component={PublicProfilePage} />
       <Route path="/verify/:token" component={VerifyPage} />
       <Route path="/batch-verify/:token" component={BatchVerifyPage} />
       <Route path="/success" component={SuccessPage} />

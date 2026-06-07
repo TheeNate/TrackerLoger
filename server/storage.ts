@@ -1,11 +1,13 @@
 import { 
   users, entries, supervisors, ropeHours, userCryptoIdentities, apiTokens,
-  type User, type InsertUser, 
+  certifications,
+  type User, type InsertUser,
   type Entry, type InsertEntry,
   type Supervisor, type InsertSupervisor,
   type RopeHours, type InsertRopeHours,
   type UserCryptoIdentity, type InsertUserCryptoIdentity,
-  type ApiToken, type InsertApiToken
+  type ApiToken, type InsertApiToken,
+  type Certification, type InsertCertification
 } from "@shared/schema";
 
 import { db } from "./db";
@@ -16,6 +18,7 @@ export interface IStorage {
   // User methods
   getUser(id: number): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByShareToken(token: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   
   // Entry methods
@@ -74,6 +77,13 @@ export interface IStorage {
   updateSupervisor(id: number, updates: Partial<InsertSupervisor>): Promise<Supervisor>;
   deleteSupervisor(id: number): Promise<void>;
   
+  // Certification methods
+  getCertifications(userId: number): Promise<Certification[]>;
+  getCertification(id: number): Promise<Certification | undefined>;
+  createCertification(cert: InsertCertification): Promise<Certification>;
+  updateCertification(id: number, updates: Partial<InsertCertification>): Promise<Certification>;
+  deleteCertification(id: number): Promise<void>;
+
   // Crypto Identity methods
   getUserCryptoIdentity(userId: number): Promise<UserCryptoIdentity | undefined>;
   createUserCryptoIdentity(cryptoIdentity: InsertUserCryptoIdentity): Promise<UserCryptoIdentity>;
@@ -91,6 +101,14 @@ export class DatabaseStorage implements IStorage {
   // User methods
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByShareToken(token: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.shareToken, token));
     return user;
   }
 
@@ -392,6 +410,44 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSupervisor(id: number): Promise<void> {
     await db.delete(supervisors).where(eq(supervisors.id, id));
+  }
+
+  // Certification methods
+  async getCertifications(userId: number): Promise<Certification[]> {
+    return await db
+      .select()
+      .from(certifications)
+      .where(eq(certifications.userId, userId))
+      .orderBy(desc(certifications.createdAt));
+  }
+
+  async getCertification(id: number): Promise<Certification | undefined> {
+    const [cert] = await db
+      .select()
+      .from(certifications)
+      .where(eq(certifications.id, id));
+    return cert;
+  }
+
+  async createCertification(cert: InsertCertification): Promise<Certification> {
+    const [created] = await db.insert(certifications).values(cert).returning();
+    return created;
+  }
+
+  async updateCertification(
+    id: number,
+    updates: Partial<InsertCertification>,
+  ): Promise<Certification> {
+    const [updated] = await db
+      .update(certifications)
+      .set(updates)
+      .where(eq(certifications.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCertification(id: number): Promise<void> {
+    await db.delete(certifications).where(eq(certifications.id, id));
   }
 
   // Crypto Identity methods

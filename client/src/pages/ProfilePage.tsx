@@ -10,6 +10,8 @@ import { EmailSentModal } from "@/components/EmailSentModal";
 import { EditEntryDialog } from "@/components/EditEntryDialog";
 import { ImportLogDialog } from "@/components/ImportLogDialog";
 import { ApiTokensCard } from "@/components/ApiTokensCard";
+import { CertificationsCard } from "@/components/CertificationsCard";
+import { ShareProfileCard } from "@/components/ShareProfileCard";
 import { Button } from "@/components/ui/button";
 import { Upload } from "lucide-react";
 import { Entry, User } from "@shared/schema";
@@ -119,6 +121,10 @@ export default function ProfilePage() {
           onBatchVerifyRequest={() => setIsBatchModalOpen(true)}
           onEditEntry={setEditingEntry}
         />
+
+        <CertificationsCard />
+
+        <ShareProfileCard />
 
         <ApiTokensCard />
 

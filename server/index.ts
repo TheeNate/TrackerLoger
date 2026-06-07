@@ -101,6 +101,38 @@ async function runMigrations() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS api_tokens_user_idx ON api_tokens(user_id);
     `);
+    // users: public share profile (token-gated read-only summary).
+    await client.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS share_token TEXT,
+        ADD COLUMN IF NOT EXISTS share_token_created_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS share_settings JSON;
+    `);
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS users_share_token_idx
+        ON users(share_token) WHERE share_token IS NOT NULL;
+    `);
+    // certifications: a technician's credentials (ASNT/IRATA/SPRAT/employer).
+    // document_key points at the uploaded certificate in object storage.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS certifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        name TEXT NOT NULL,
+        method TEXT,
+        level TEXT,
+        issuing_body TEXT,
+        cert_number TEXT,
+        issue_date TIMESTAMP,
+        expiry_date TIMESTAMP,
+        document_key TEXT,
+        document_name TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS certifications_user_idx ON certifications(user_id);
+    `);
     // OAuth 2.0 tables for MCP clients (claude.ai web, Cowork).
     await client.query(`
       CREATE TABLE IF NOT EXISTS oauth_clients (

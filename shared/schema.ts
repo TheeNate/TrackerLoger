@@ -57,6 +57,21 @@ export function canonicalizeSupervisorWrite<
   };
 }
 
+// What a user has chosen to expose on their public share profile. Arrays are
+// explicit allowlists: ojtMethods lists which NDT methods to show, certIds lists
+// which certifications to show. includeRope toggles the rope-access summary.
+export type ShareSettings = {
+  ojtMethods: string[];
+  includeRope: boolean;
+  certIds: number[];
+};
+
+export const shareSettingsSchema = z.object({
+  ojtMethods: z.array(z.string()).max(50).default([]),
+  includeRope: z.boolean().default(false),
+  certIds: z.array(z.number().int()).max(200).default([]),
+});
+
 // User model with password auth
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -68,6 +83,11 @@ export const users = pgTable("users", {
   resetToken: text("reset_token"),
   resetTokenExpiry: timestamp("reset_token_expiry"),
   createdAt: timestamp("created_at").defaultNow(),
+  // Public share profile: an unguessable token gates a read-only summary page.
+  // Null token = sharing disabled. shareSettings controls what's exposed.
+  shareToken: text("share_token").unique(),
+  shareTokenCreatedAt: timestamp("share_token_created_at"),
+  shareSettings: json("share_settings").$type<ShareSettings>(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -147,6 +167,59 @@ export const insertSupervisorSchema = createInsertSchema(supervisors)
   .extend({
     qualifications: z.array(supervisorQualificationSchema).optional(),
   });
+
+// Certification / qualification a technician holds (ASNT, IRATA, SPRAT,
+// employer cards, etc.). One row per credential; the uploaded certificate file
+// lives in object storage under certifications/<userId>/... and is referenced
+// by documentKey (same storage pattern as imported signed logs).
+export const certifications = pgTable("certifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(), // e.g. "ASNT NDT Level II"
+  method: text("method"), // discipline, e.g. "UT", "Rope Access" (free text)
+  level: text("level"), // e.g. "Level II", "Level 3" (free text)
+  issuingBody: text("issuing_body"), // ASNT / IRATA / SPRAT / employer name
+  certNumber: text("cert_number"), // credential / certificate number
+  issueDate: timestamp("issue_date"),
+  expiryDate: timestamp("expiry_date"),
+  documentKey: text("document_key"), // "/objects/certifications/<userId>/<uuid>-<name>"
+  documentName: text("document_name"), // original uploaded filename
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Common issuing bodies. The form still accepts free text via "Other".
+export const CERT_ISSUING_BODIES = [
+  "ASNT",
+  "IRATA",
+  "SPRAT",
+  "API",
+  "AWS",
+  "Employer",
+  "Other",
+] as const;
+
+// Validated shape for creating/updating a certification. Dates arrive as
+// strings from the client so they're coerced; userId is taken from the session,
+// never the request body.
+export const certificationWriteSchema = z.object({
+  name: z.string().min(1).max(200),
+  method: z.string().max(100).nullish(),
+  level: z.string().max(100).nullish(),
+  issuingBody: z.string().max(200).nullish(),
+  certNumber: z.string().max(200).nullish(),
+  issueDate: z.coerce.date().nullish(),
+  expiryDate: z.coerce.date().nullish(),
+  documentKey: z
+    .string()
+    .max(500)
+    .regex(/^\/objects\/certifications\//)
+    .nullish(),
+  documentName: z.string().max(500).nullish(),
+});
+
+export type CertificationWrite = z.infer<typeof certificationWriteSchema>;
+export type Certification = typeof certifications.$inferSelect;
+export type InsertCertification = typeof certifications.$inferInsert;
 
 // Rope Hours model
 export const ropeHours = pgTable("rope_hours", {

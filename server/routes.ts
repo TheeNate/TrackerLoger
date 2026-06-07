@@ -12,7 +12,7 @@ import PgStore from "connect-pg-simple";
 import { add } from "date-fns";
 import { pool } from "./db";
 import { db } from "./db";
-import { users, entries, supervisors, ropeHours, type User } from "@shared/schema";
+import { users, entries, supervisors, ropeHours, certifications, type User } from "@shared/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
 import {
   getBaseUrl,
@@ -28,6 +28,8 @@ import {
   insertUserSchema,
   insertRopeHoursSchema,
   canonicalizeSupervisorWrite,
+  certificationWriteSchema,
+  shareSettingsSchema,
   NDTMethods,
 } from "@shared/schema";
 import { z } from "zod";
@@ -1899,6 +1901,316 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res
         .status(500)
         .json({ message: "Error fetching source document" });
+    }
+  });
+
+  // ---------- Certifications (technician credentials vault) ----------
+  app.get("/api/certifications", requireAuthOrToken, async (req, res) => {
+    try {
+      const certs = await storage.getCertifications(req.session.userId!);
+      res.json(certs);
+    } catch (error) {
+      console.error("List certifications error:", error);
+      res.status(500).json({ message: "Error fetching certifications" });
+    }
+  });
+
+  app.post("/api/certifications", requireAuthOrToken, async (req, res) => {
+    try {
+      const data = certificationWriteSchema.parse(req.body);
+      const created = await storage.createCertification({
+        ...data,
+        userId: req.session.userId!,
+      });
+      res.status(201).json(created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res
+          .status(400)
+          .json({ message: "Invalid certification data", errors: error.errors });
+      }
+      console.error("Create certification error:", error);
+      res.status(500).json({ message: "Error creating certification" });
+    }
+  });
+
+  app.patch("/api/certifications/:id", requireAuthOrToken, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+
+      const existing = await storage.getCertification(id);
+      if (!existing) return res.status(404).json({ message: "Certification not found" });
+      if (existing.userId !== userId) return res.status(403).json({ message: "Unauthorized" });
+
+      const updates = certificationWriteSchema.partial().parse(req.body);
+      const updated = await storage.updateCertification(id, updates);
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res
+          .status(400)
+          .json({ message: "Invalid certification data", errors: error.errors });
+      }
+      console.error("Update certification error:", error);
+      res.status(500).json({ message: "Error updating certification" });
+    }
+  });
+
+  app.delete("/api/certifications/:id", requireAuthOrToken, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+
+      const existing = await storage.getCertification(id);
+      if (!existing) return res.status(404).json({ message: "Certification not found" });
+      if (existing.userId !== userId) return res.status(403).json({ message: "Unauthorized" });
+
+      await storage.deleteCertification(id);
+      res.json({ message: "Certification deleted" });
+    } catch (error) {
+      console.error("Delete certification error:", error);
+      res.status(500).json({ message: "Error deleting certification" });
+    }
+  });
+
+  // Upload a certificate file (PDF/image) to object storage and return its key.
+  // The client then includes that key when creating/updating the certification.
+  app.post(
+    "/api/certifications/upload",
+    requireAuth,
+    upload.single("file"),
+    async (req, res) => {
+      try {
+        const userId = req.session.userId!;
+        const file = req.file;
+        if (!file) {
+          return res.status(400).json({ message: "No file uploaded" });
+        }
+        if (!ALLOWED_IMPORT_MIMES.has(file.mimetype)) {
+          return res.status(400).json({
+            message:
+              "Unsupported file type. Please upload a PDF or image (JPG, PNG, WEBP).",
+          });
+        }
+        const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const objectId = cryptoRandomUUID();
+        const relativePath = `certifications/${userId}/${objectId}-${safeName}`;
+        const documentKey = await objectStorageService.uploadBuffer(
+          relativePath,
+          file.buffer,
+          file.mimetype,
+        );
+        return res.json({ documentKey, documentName: file.originalname });
+      } catch (error) {
+        console.error("Certification upload error:", error);
+        return res.status(500).json({ message: "Error uploading certificate" });
+      }
+    },
+  );
+
+  // Return a short-lived signed URL to view a certification's uploaded file.
+  app.get(
+    "/api/certifications/:id/document",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const userId = req.session.userId!;
+        const id = parseInt(req.params.id, 10);
+        if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+
+        const cert = await storage.getCertification(id);
+        if (!cert || !cert.documentKey) {
+          return res.status(404).json({ message: "Certificate file not found" });
+        }
+        if (cert.userId !== userId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+
+        const url = await objectStorageService.getSignedDownloadURL(
+          cert.documentKey,
+          600,
+        );
+        return res.json({ url, name: cert.documentName });
+      } catch (error) {
+        console.error("Certification document error:", error);
+        if (error instanceof ObjectNotFoundError) {
+          return res.status(404).json({ message: "Certificate file not found" });
+        }
+        return res.status(500).json({ message: "Error fetching certificate file" });
+      }
+    },
+  );
+
+  // ---------- Shareable public profile ----------
+  // Current share state for the signed-in user (token may be null = disabled).
+  app.get("/api/share", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      res.json({
+        shareToken: user.shareToken ?? null,
+        shareSettings: user.shareSettings ?? null,
+      });
+    } catch (error) {
+      console.error("Get share error:", error);
+      res.status(500).json({ message: "Error fetching share settings" });
+    }
+  });
+
+  // Enable sharing and/or save what's exposed. Generates a token on first enable.
+  app.put("/api/share", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const settings = shareSettingsSchema.parse(req.body?.settings ?? req.body);
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      const updates: {
+        shareSettings: typeof settings;
+        shareToken?: string;
+        shareTokenCreatedAt?: Date;
+      } = { shareSettings: settings };
+      let token = user.shareToken;
+      if (!token) {
+        token = randomUUID();
+        updates.shareToken = token;
+        updates.shareTokenCreatedAt = new Date();
+      }
+      await db.update(users).set(updates).where(eq(users.id, userId));
+      res.json({ shareToken: token, shareSettings: settings });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res
+          .status(400)
+          .json({ message: "Invalid share settings", errors: error.errors });
+      }
+      console.error("Save share error:", error);
+      res.status(500).json({ message: "Error saving share settings" });
+    }
+  });
+
+  // Rotate the token, invalidating any previously shared links.
+  app.post("/api/share/rotate", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const token = randomUUID();
+      await db
+        .update(users)
+        .set({ shareToken: token, shareTokenCreatedAt: new Date() })
+        .where(eq(users.id, userId));
+      res.json({ shareToken: token });
+    } catch (error) {
+      console.error("Rotate share error:", error);
+      res.status(500).json({ message: "Error rotating share link" });
+    }
+  });
+
+  // Disable sharing — any existing link stops working immediately.
+  app.delete("/api/share", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      await db
+        .update(users)
+        .set({ shareToken: null, shareTokenCreatedAt: null })
+        .where(eq(users.id, userId));
+      res.json({ message: "Sharing disabled" });
+    } catch (error) {
+      console.error("Disable share error:", error);
+      res.status(500).json({ message: "Error disabling sharing" });
+    }
+  });
+
+  // Public, no-auth read-only summary gated by the unguessable share token.
+  // Exposes only what the owner selected in shareSettings.
+  app.get("/api/public-profile/:token", async (req, res) => {
+    try {
+      const token = (req.params.token ?? "").toString();
+      const user = token ? await storage.getUserByShareToken(token) : undefined;
+      if (!user || !user.shareToken) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+      const settings = user.shareSettings ?? {
+        ojtMethods: [],
+        includeRope: false,
+        certIds: [],
+      };
+
+      // OJT hours, restricted to the methods the owner chose to share.
+      const allowMethods = new Set(settings.ojtMethods);
+      const entries = await storage.getEntries(user.id);
+      const byMethod = new Map<
+        string,
+        { totalHours: number; verifiedHours: number; count: number }
+      >();
+      for (const e of entries) {
+        if (!allowMethods.has(e.method)) continue;
+        const m = byMethod.get(e.method) ?? {
+          totalHours: 0,
+          verifiedHours: 0,
+          count: 0,
+        };
+        m.totalHours += e.hours;
+        if (e.verified) m.verifiedHours += e.hours;
+        m.count += 1;
+        byMethod.set(e.method, m);
+      }
+      const ojtByMethod = Array.from(byMethod.entries())
+        .map(([method, v]) => ({
+          method,
+          totalHours: Math.round(v.totalHours * 10) / 10,
+          verifiedHours: Math.round(v.verifiedHours * 10) / 10,
+          count: v.count,
+        }))
+        .sort((a, b) => b.totalHours - a.totalHours);
+      const ojtTotalVerified =
+        Math.round(
+          ojtByMethod.reduce((s, m) => s + m.verifiedHours, 0) * 10,
+        ) / 10;
+
+      // Rope-access summary, only if the owner opted in.
+      let rope: { totalHours: number; verifiedHours: number; count: number } | null =
+        null;
+      if (settings.includeRope) {
+        const rows = await storage.getRopeHours(user.id);
+        let total = 0;
+        let verified = 0;
+        for (const r of rows) {
+          total += r.hours;
+          if (r.verified) verified += r.hours;
+        }
+        rope = {
+          totalHours: Math.round(total * 10) / 10,
+          verifiedHours: Math.round(verified * 10) / 10,
+          count: rows.length,
+        };
+      }
+
+      // Selected certifications (metadata only — no file links).
+      const allowCerts = new Set(settings.certIds);
+      const allCerts = await storage.getCertifications(user.id);
+      const certifications = allCerts
+        .filter((c) => allowCerts.has(c.id))
+        .map((c) => ({
+          name: c.name,
+          issuingBody: c.issuingBody,
+          method: c.method,
+          level: c.level,
+          issueDate: c.issueDate,
+          expiryDate: c.expiryDate,
+        }));
+
+      res.json({
+        name: user.name ?? null,
+        ojt: { byMethod: ojtByMethod, totalVerifiedHours: ojtTotalVerified },
+        rope,
+        certifications,
+      });
+    } catch (error) {
+      console.error("Public profile error:", error);
+      res.status(500).json({ message: "Error fetching public profile" });
     }
   });
 
