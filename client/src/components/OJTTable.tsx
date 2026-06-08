@@ -5,7 +5,7 @@ import { ImportedLogGroups } from "@/components/ImportedLogGroups";
 import { ExportFormDialog } from "@/components/ExportFormDialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ListChecks } from "lucide-react";
+import { ChevronDown, ChevronRight, ListChecks } from "lucide-react";
 
 interface OJTTableProps {
   entries: Entry[];
@@ -35,6 +35,21 @@ export function OJTTable({
   }, [entries]);
 
   const [exportOpen, setExportOpen] = useState(false);
+  // Collapsed by default — the list can get very long, so show only totals
+  // until the user expands it.
+  const [open, setOpen] = useState(false);
+
+  // Per-method totals across every method present (not just the legacy 9),
+  // plus a grand total, for the collapsed summary.
+  const methodTotals = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const e of entries) map.set(e.method, (map.get(e.method) ?? 0) + e.hours);
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [entries]);
+  const grandTotal = useMemo(
+    () => entries.reduce((s, e) => s + e.hours, 0),
+    [entries],
+  );
 
   const unverifiedEntries = entries.filter((e) => !e.verified);
   // Selectable rows are anything not imported (imported rows show their own
@@ -65,9 +80,20 @@ export function OJTTable({
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-      <ImportedLogGroups records={entries} recordType="entry" />
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-neutral-900">Experience Hours (OJT) Log</h2>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-2 text-lg font-semibold text-neutral-900"
+          aria-expanded={open}
+        >
+          {open ? (
+            <ChevronDown className="h-5 w-5 text-neutral-500" />
+          ) : (
+            <ChevronRight className="h-5 w-5 text-neutral-500" />
+          )}
+          Experience Hours (OJT) Log
+        </button>
         <div className="flex flex-wrap gap-2">
           {canBatchVerify && (
             <Button
@@ -91,6 +117,32 @@ export function OJTTable({
         </div>
       </div>
 
+      {!open && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span className="text-sm font-semibold text-neutral-900">
+            {grandTotal.toFixed(1)} total hours
+          </span>
+          <span className="text-sm text-neutral-500">
+            {entries.length} {entries.length === 1 ? "entry" : "entries"}
+          </span>
+          {methodTotals.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {methodTotals.map(([m, h]) => (
+                <span
+                  key={m}
+                  className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700"
+                >
+                  {m} {h.toFixed(1)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {open && (
+      <>
+      <ImportedLogGroups records={entries} recordType="entry" />
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-neutral-200 ojt-table">
           <thead>
@@ -161,6 +213,8 @@ export function OJTTable({
           <span>Verified Entry</span>
         </div>
       </div>
+      </>
+      )}
 
       <ExportFormDialog
         open={exportOpen}

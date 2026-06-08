@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
-import { Calendar, Clock, MapPin, Cable, User, Pencil, Upload, FileText, Trash2, CloudOff, AlertTriangle, RefreshCw } from "lucide-react";
+import { Calendar, Clock, MapPin, Cable, User, Pencil, Upload, FileText, Trash2, CloudOff, AlertTriangle, RefreshCw, ChevronDown, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { RopeHours } from "@shared/schema";
@@ -53,6 +53,9 @@ export default function RopeHoursPage() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [selectedRopeHourIds, setSelectedRopeHourIds] = useState<Set<number>>(new Set());
   const [exportOpen, setExportOpen] = useState(false);
+  // Rope Hours History is collapsed by default — the list can get long. The
+  // Total Verified Hours card above always stays visible.
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const toggleSelected = (id: number) => {
     setSelectedRopeHourIds((prev) => {
@@ -91,13 +94,13 @@ export default function RopeHoursPage() {
   });
 
   // Fetch rope hours
-  const { data: ropeHours = [], isLoading } = useQuery({
+  const { data: ropeHours = [], isLoading } = useQuery<RopeHours[]>({
     queryKey: ["/api/rope-hours"],
     enabled: !!user
   });
 
   // Fetch supervisors
-  const { data: supervisors = [] } = useQuery({
+  const { data: supervisors = [] } = useQuery<any[]>({
     queryKey: ["/api/supervisors"],
     enabled: !!user
   });
@@ -477,19 +480,41 @@ export default function RopeHoursPage() {
         </CardContent>
       </Card>
 
-      <ImportedLogGroups
-        records={ropeHours as RopeHours[]}
-        recordType="rope"
-      />
+      {historyOpen && (
+        <ImportedLogGroups
+          records={ropeHours as RopeHours[]}
+          recordType="rope"
+        />
+      )}
 
       {/* Rope Hours History */}
       <Card>
         <CardHeader>
-          <CardTitle>Rope Hours History</CardTitle>
-          <CardDescription>
-            Your logged rope hours and verification status
-          </CardDescription>
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((o) => !o)}
+            className="flex items-center gap-2 text-left"
+            aria-expanded={historyOpen}
+          >
+            {historyOpen ? (
+              <ChevronDown className="h-5 w-5 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            )}
+            <CardTitle>
+              Rope Hours History
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                ({ropeHours.length})
+              </span>
+            </CardTitle>
+          </button>
+          {historyOpen && (
+            <CardDescription className="mt-1">
+              Your logged rope hours and verification status
+            </CardDescription>
+          )}
         </CardHeader>
+        {historyOpen && (
         <CardContent>
           {isLoading ? (
             <div className="text-center py-8">Loading rope hours...</div>
@@ -749,6 +774,7 @@ export default function RopeHoursPage() {
             </div>
           )}
         </CardContent>
+        )}
       </Card>
       </main>
 

@@ -19,7 +19,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Award, FileText, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import {
+  Award,
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { CERT_ISSUING_BODIES, type Certification } from "@shared/schema";
 
 // Empty form state for a new certification.
@@ -85,11 +94,23 @@ export function CertificationsCard() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<CertForm>(EMPTY_FORM);
   const [uploading, setUploading] = useState(false);
+  // Collapsed by default to keep the profile page short.
+  const [expanded, setExpanded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: certs = [], isLoading } = useQuery<Certification[]>({
     queryKey: ["/api/certifications"],
   });
+
+  const now = Date.now();
+  const expiredCount = certs.filter(
+    (c) => c.expiryDate && new Date(c.expiryDate).getTime() < now,
+  ).length;
+  const soonCount = certs.filter((c) => {
+    if (!c.expiryDate) return false;
+    const days = (new Date(c.expiryDate).getTime() - now) / 86400000;
+    return days >= 0 && days <= 90;
+  }).length;
 
   const resetAndClose = () => {
     setIsOpen(false);
@@ -224,15 +245,45 @@ export function CertificationsCard() {
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 mt-6">
       <div className="flex items-start justify-between mb-4">
-        <div>
-          <h2 className="text-lg font-semibold text-neutral-900 flex items-center gap-2">
+        <div className="min-w-0">
+          <button
+            type="button"
+            onClick={() => setExpanded((o) => !o)}
+            className="flex items-center gap-2 text-lg font-semibold text-neutral-900"
+            aria-expanded={expanded}
+          >
+            {expanded ? (
+              <ChevronDown className="h-5 w-5 text-neutral-500" />
+            ) : (
+              <ChevronRight className="h-5 w-5 text-neutral-500" />
+            )}
             <Award className="h-5 w-5 text-primary" />
             Certifications
-          </h2>
-          <p className="text-sm text-neutral-600 mt-1">
-            Store every credential in one place — ASNT, IRATA, SPRAT, employer cards.
-            Attach the certificate and track expiry dates.
-          </p>
+            <span className="text-sm font-normal text-neutral-500">
+              ({certs.length})
+            </span>
+          </button>
+          {expanded ? (
+            <p className="text-sm text-neutral-600 mt-1">
+              Store every credential in one place — ASNT, IRATA, SPRAT, employer
+              cards. Attach the certificate and track expiry dates.
+            </p>
+          ) : (
+            (expiredCount > 0 || soonCount > 0) && (
+              <div className="flex flex-wrap gap-2 mt-1.5">
+                {expiredCount > 0 && (
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                    {expiredCount} expired
+                  </span>
+                )}
+                {soonCount > 0 && (
+                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                    {soonCount} expiring soon
+                  </span>
+                )}
+              </div>
+            )
+          )}
         </div>
         <Button type="button" onClick={openNew} size="sm">
           <Plus className="h-4 w-4 mr-2" />
@@ -240,7 +291,7 @@ export function CertificationsCard() {
         </Button>
       </div>
 
-      {isLoading ? (
+      {!expanded ? null : isLoading ? (
         <p className="text-sm text-neutral-500">Loading certifications…</p>
       ) : certs.length === 0 ? (
         <p className="text-sm text-neutral-500">
