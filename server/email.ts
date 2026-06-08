@@ -225,6 +225,37 @@ export async function sendBatchVerificationRequest(
 }
 
 // Send verification confirmation email to user (OJT entries)
+// Invite a newly-created user: send their login email + a temporary password.
+export async function sendInviteEmail(
+  to: string,
+  tempPassword: string,
+  name?: string | null,
+): Promise<boolean> {
+  const loginUrl = `${getBaseUrl()}/auth`;
+  const html = `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>You've been invited to OJT Hours Tracker</h2>
+      <p>${name ? `Hi ${name},` : "Hi,"}</p>
+      <p>An account has been created for you. Sign in with the credentials below:</p>
+
+      <div style="background-color: #f4f4f4; padding: 15px; border-radius: 4px; margin: 20px 0;">
+        <p><strong>Email:</strong> ${to}</p>
+        <p><strong>Temporary password:</strong> ${tempPassword}</p>
+      </div>
+
+      <p>
+        <a href="${loginUrl}" style="background-color: #2563eb; color: #fff; padding: 10px 16px; border-radius: 4px; text-decoration: none;">
+          Sign in
+        </a>
+      </p>
+      <p style="color: #666; font-size: 13px;">
+        For your security, please change this password after signing in. If you weren't expecting this invite, you can ignore this email.
+      </p>
+    </div>
+  `;
+  return await sendEmail(to, "Your OJT Hours Tracker account", html);
+}
+
 export async function sendVerificationConfirmation(
   user: User,
   entry: Entry,

@@ -21,6 +21,7 @@ import {
   sendVerificationRequest,
   sendRopeHoursVerificationRequest,
   sendBatchVerificationRequest,
+  sendInviteEmail,
 } from "./email";
 import {
   insertEntrySchema,
@@ -1556,6 +1557,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const { password, resetToken, resetTokenExpiry, ...safe } = u;
     return safe;
   };
+
+  // A short, url-safe temporary password for admin-created accounts.
+  const genTempPassword = () => randomBytes(9).toString("base64url").slice(0, 12);
+
+  // Create a new (non-admin) user with an admin-generated password. Optionally
+  // emails the invite immediately. Always returns the temp password once so the
+  // admin can share it manually if email isn't configured.
+  app.post("/api/admin/users", requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        email: z.string().email().max(255),
+        name: z.string().max(200).nullish(),
+        employeeNumber: z.string().max(100).nullish(),
+        sendInvite: z.boolean().optional(),
+      });
+      const body = schema.parse(req.body);
+      const email = body.email.trim().toLowerCase();
+
+      const existing = await storage.getUserByEmail(email);
+      if (existing) {
+        return res
+          .status(409)
+          .json({ message: "A user with that email already exists" });
+      }
+
+      const tempPassword = genTempPassword();
+      const hashed = await hash(tempPassword, 10);
+      const [created] = await db
+        .insert(users)
+        .values({
+          email,
+          password: hashed,
+          name: body.name ?? null,
+          employeeNumber: body.employeeNumber ?? null,
+          isAdmin: false,
+        })
+        .returning();
+
+      let invited = false;
+      let inviteError: string | null = null;
+      if (body.sendInvite) {
+        invited = await sendInviteEmail(email, tempPassword, created.name);
+        if (!invited) {
+          inviteError =
+            "Couldn't send the email (is email configured?). Share the password manually.";
+        }
+      }
+
+      res.status(201).json({
+        user: sanitizeUser(created),
+        tempPassword,
+        invited,
+        inviteError,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res
+          .status(400)
+          .json({ message: "Invalid user data", errors: error.errors });
+      }
+      console.error("Admin create user error:", error);
+      res.status(500).json({ message: "Error creating user" });
+    }
+  });
+
+  // Re-send an invite: set a fresh temp password and email it. Returns the
+  // password so the admin can copy it if email delivery isn't available.
+  app.post("/api/admin/users/:id/invite", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const target = await storage.getUser(id);
+      if (!target) return res.status(404).json({ message: "User not found" });
+
+      const tempPassword = genTempPassword();
+      const hashed = await hash(tempPassword, 10);
+      await db.update(users).set({ password: hashed }).where(eq(users.id, id));
+
+      const sent = await sendInviteEmail(target.email, tempPassword, target.name);
+      res.json({
+        tempPassword,
+        sent,
+        error: sent
+          ? null
+          : "Couldn't send the email (is email configured?). Share the password manually.",
+      });
+    } catch (error) {
+      console.error("Admin invite error:", error);
+      res.status(500).json({ message: "Error sending invite" });
+    }
+  });
 
   // Full profile for one user, with quick counts/totals for the detail header.
   app.get("/api/admin/users/:id", requireAdmin, async (req, res) => {

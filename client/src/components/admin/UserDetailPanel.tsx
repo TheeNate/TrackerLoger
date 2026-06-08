@@ -30,6 +30,7 @@ import {
   FileText,
   KeyRound,
   Loader2,
+  Mail,
   Plus,
   Shield,
   ShieldOff,
@@ -125,6 +126,9 @@ export function UserDetailPanel({
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [resetUrl, setResetUrl] = useState<string | null>(null);
+  const [inviteResult, setInviteResult] = useState<
+    { tempPassword: string; sent: boolean; error: string | null } | null
+  >(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const isSelf = userId === currentAdminId;
 
@@ -179,6 +183,16 @@ export function UserDetailPanel({
     onSuccess: (data) => setResetUrl(data.resetUrl),
     onError: (err: Error) =>
       toast({ title: "Could not generate link", description: err.message, variant: "destructive" }),
+  });
+
+  const inviteMut = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/admin/users/${userId}/invite`);
+      return (await res.json()) as { tempPassword: string; sent: boolean; error: string | null };
+    },
+    onSuccess: (data) => setInviteResult(data),
+    onError: (err: Error) =>
+      toast({ title: "Could not send invite", description: err.message, variant: "destructive" }),
   });
 
   const deleteMut = useMutation({
@@ -277,6 +291,16 @@ export function UserDetailPanel({
         >
           <Eye className="h-4 w-4 mr-1.5" />
           View as user
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => inviteMut.mutate()}
+          disabled={inviteMut.isPending}
+          title="Set a fresh password and email login details to this user"
+        >
+          <Mail className="h-4 w-4 mr-1.5" />
+          {inviteMut.isPending ? "…" : "Send invite"}
         </Button>
         <Button
           size="sm"
@@ -527,6 +551,42 @@ export function UserDetailPanel({
         open={certDialogOpen}
         onClose={() => setCertDialogOpen(false)}
       />
+
+      {/* Invite result dialog */}
+      <Dialog open={!!inviteResult} onOpenChange={(o) => !o && setInviteResult(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite sent</DialogTitle>
+            <DialogDescription>
+              {inviteResult?.sent
+                ? `Login details emailed to ${u.email}. A fresh password was set.`
+                : inviteResult?.error ||
+                  "Email couldn't be sent — share the password below manually."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center justify-between bg-neutral-100 rounded p-2 text-sm">
+            <span>
+              <span className="text-neutral-500">Temp password: </span>
+              <span className="font-mono">{inviteResult?.tempPassword}</span>
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={async () => {
+                if (inviteResult?.tempPassword) {
+                  await navigator.clipboard.writeText(inviteResult.tempPassword).catch(() => {});
+                  toast({ title: "Copied" });
+                }
+              }}
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setInviteResult(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reset link dialog */}
       <Dialog open={!!resetUrl} onOpenChange={(o) => !o && setResetUrl(null)}>

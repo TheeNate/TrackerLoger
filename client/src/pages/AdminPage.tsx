@@ -4,16 +4,19 @@ import { getQueryFn } from "@/lib/queryClient";
 import { User } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
-import { Loader2, Search, Shield, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2, Search, Shield, UserPlus, Users } from "lucide-react";
 import { useLocation } from "wouter";
 import { AdminViewToggle } from "@/components/admin/AdminViewToggle";
 import { UserDetailPanel } from "@/components/admin/UserDetailPanel";
+import { AddUserDialog } from "@/components/admin/AddUserDialog";
 
 export default function AdminPage() {
   const { user, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   // Redirect non-admins away.
   useEffect(() => {
@@ -67,6 +70,14 @@ export default function AdminPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
           {/* User list */}
           <aside className="bg-white rounded-lg shadow-sm p-4 h-fit">
+            <Button
+              size="sm"
+              className="w-full mb-3"
+              onClick={() => setAddOpen(true)}
+            >
+              <UserPlus className="h-4 w-4 mr-2" />
+              Add user
+            </Button>
             <div className="flex items-center gap-2 mb-3">
               <Search className="h-4 w-4 text-neutral-400" />
               <Input
@@ -131,6 +142,12 @@ export default function AdminPage() {
           </section>
         </div>
       </main>
+
+      <AddUserDialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onCreated={(id) => setSelectedUserId(id)}
+      />
     </div>
   );
 }
