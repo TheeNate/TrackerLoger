@@ -4,8 +4,12 @@ import { User } from "@shared/schema";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+// The /api/user response includes an `impersonating` flag when an admin is
+// viewing the app as another user.
+export type AuthUser = User & { impersonating?: boolean };
+
 type AuthContextType = {
-  user: User | null;
+  user: AuthUser | null;
   isLoading: boolean;
   error: Error | null;
   loginMutation: ReturnType<typeof useLoginMutation>;
@@ -27,9 +31,9 @@ export type RegisterData = {
 
 // Use query hook for getting current user
 function useUserQuery() {
-  return useQuery<User | null, Error>({
+  return useQuery<AuthUser | null, Error>({
     queryKey: ["/api/user"],
-    queryFn: getQueryFn<User | null>({ on401: "returnNull" }),
+    queryFn: getQueryFn<AuthUser | null>({ on401: "returnNull" }),
   });
 }
 

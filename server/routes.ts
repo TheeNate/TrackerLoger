@@ -61,6 +61,9 @@ import { createHash } from "crypto";
 declare module "express-session" {
   interface SessionData {
     userId?: number;
+    // When an admin is impersonating ("view as user"), userId holds the target
+    // user's id and adminUserId holds the real admin's id so they can exit.
+    adminUserId?: number;
     magicLinkToken?: string;
     magicLinkEmail?: string;
   }
@@ -163,6 +166,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Shared object storage service (used for imported source-document
   // upload, download, and cleanup on delete).
   const objectStorageService = new ObjectStorageService();
+
+  // Shared multer instance + allowed upload types (signed-log imports and
+  // certificate uploads, including admin-on-behalf uploads).
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB
+  });
+  const ALLOWED_IMPORT_MIMES = new Set([
+    "application/pdf",
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+  ]);
 
   // Authentication middleware
   const requireAuth = (req: Request, res: Response, next: Function) => {
@@ -485,9 +505,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Send user data without password
+      // Send user data without password. Flag impersonation so the client can
+      // show the "viewing as" banner and an exit control.
       const { password, ...userWithoutPassword } = user;
-      res.json(userWithoutPassword);
+      res.json({
+        ...userWithoutPassword,
+        impersonating: !!req.session.adminUserId,
+      });
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Error fetching user" });
@@ -1527,6 +1551,327 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ---------- Admin: per-user detail & management (master-detail panel) ----------
+  const sanitizeUser = (u: typeof users.$inferSelect) => {
+    const { password, resetToken, resetTokenExpiry, ...safe } = u;
+    return safe;
+  };
+
+  // Full profile for one user, with quick counts/totals for the detail header.
+  app.get("/api/admin/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+      const u = await storage.getUser(id);
+      if (!u) return res.status(404).json({ message: "User not found" });
+
+      const [entries, rope, certs] = await Promise.all([
+        storage.getEntries(id),
+        storage.getRopeHours(id),
+        storage.getCertifications(id),
+      ]);
+      const sum = (arr: { hours: number }[]) =>
+        Math.round(arr.reduce((s, r) => s + r.hours, 0) * 10) / 10;
+      res.json({
+        user: sanitizeUser(u),
+        counts: {
+          entries: entries.length,
+          ropeHours: rope.length,
+          certifications: certs.length,
+        },
+        totals: {
+          ojtHours: sum(entries),
+          ojtVerifiedHours: sum(entries.filter((e) => e.verified)),
+          ropeHours: sum(rope),
+          ropeVerifiedHours: sum(rope.filter((r) => r.verified)),
+        },
+      });
+    } catch (error) {
+      console.error("Admin user detail error:", error);
+      res.status(500).json({ message: "Error fetching user" });
+    }
+  });
+
+  app.get("/api/admin/users/:id/entries", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      res.json(await storage.getEntries(id));
+    } catch (error) {
+      console.error("Admin user entries error:", error);
+      res.status(500).json({ message: "Error fetching entries" });
+    }
+  });
+
+  app.get("/api/admin/users/:id/rope-hours", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      res.json(await storage.getRopeHours(id));
+    } catch (error) {
+      console.error("Admin user rope error:", error);
+      res.status(500).json({ message: "Error fetching rope hours" });
+    }
+  });
+
+  app.get("/api/admin/users/:id/certifications", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      res.json(await storage.getCertifications(id));
+    } catch (error) {
+      console.error("Admin user certs error:", error);
+      res.status(500).json({ message: "Error fetching certifications" });
+    }
+  });
+
+  // Signed URL for any user's imported source document (admin override of the
+  // owner check in /api/source-document).
+  app.get("/api/admin/source-document", requireAdmin, async (req, res) => {
+    try {
+      const recordType = (req.query.type ?? "").toString();
+      const recordId = parseInt((req.query.id ?? "").toString(), 10);
+      if (recordType !== "entry" && recordType !== "rope") {
+        return res.status(400).json({ message: "Invalid type" });
+      }
+      if (!Number.isFinite(recordId)) {
+        return res.status(400).json({ message: "Invalid id" });
+      }
+      const rec =
+        recordType === "entry"
+          ? await storage.getEntry(recordId)
+          : await storage.getRopeHour(recordId);
+      if (!rec || !rec.sourceDocumentKey) {
+        return res.status(404).json({ message: "Source document not found" });
+      }
+      const url = await objectStorageService.getSignedDownloadURL(
+        rec.sourceDocumentKey,
+        600,
+      );
+      res.json({ url, name: rec.sourceDocumentName });
+    } catch (error) {
+      console.error("Admin source document error:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.status(404).json({ message: "Source document not found" });
+      }
+      res.status(500).json({ message: "Error fetching source document" });
+    }
+  });
+
+  // Signed URL for any user's certificate file.
+  app.get("/api/admin/certifications/:id/document", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const cert = await storage.getCertification(id);
+      if (!cert || !cert.documentKey) {
+        return res.status(404).json({ message: "Certificate file not found" });
+      }
+      const url = await objectStorageService.getSignedDownloadURL(
+        cert.documentKey,
+        600,
+      );
+      res.json({ url, name: cert.documentName });
+    } catch (error) {
+      console.error("Admin cert document error:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.status(404).json({ message: "Certificate file not found" });
+      }
+      res.status(500).json({ message: "Error fetching certificate file" });
+    }
+  });
+
+  // Upload a certificate file on a user's behalf (stored under their folder).
+  app.post(
+    "/api/admin/users/:id/certifications/upload",
+    requireAdmin,
+    upload.single("file"),
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id, 10);
+        const target = await storage.getUser(id);
+        if (!target) return res.status(404).json({ message: "User not found" });
+        const file = req.file;
+        if (!file) return res.status(400).json({ message: "No file uploaded" });
+        if (!ALLOWED_IMPORT_MIMES.has(file.mimetype)) {
+          return res.status(400).json({
+            message:
+              "Unsupported file type. Please upload a PDF or image (JPG, PNG, WEBP).",
+          });
+        }
+        const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const objectId = cryptoRandomUUID();
+        const documentKey = await objectStorageService.uploadBuffer(
+          `certifications/${id}/${objectId}-${safeName}`,
+          file.buffer,
+          file.mimetype,
+        );
+        res.json({ documentKey, documentName: file.originalname });
+      } catch (error) {
+        console.error("Admin cert upload error:", error);
+        res.status(500).json({ message: "Error uploading certificate" });
+      }
+    },
+  );
+
+  // Create a certification for a user.
+  app.post("/api/admin/users/:id/certifications", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const target = await storage.getUser(id);
+      if (!target) return res.status(404).json({ message: "User not found" });
+      const data = certificationWriteSchema.parse(req.body);
+      const created = await storage.createCertification({ ...data, userId: id });
+      res.status(201).json(created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res
+          .status(400)
+          .json({ message: "Invalid certification data", errors: error.errors });
+      }
+      console.error("Admin create cert error:", error);
+      res.status(500).json({ message: "Error creating certification" });
+    }
+  });
+
+  app.patch("/api/admin/certifications/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const existing = await storage.getCertification(id);
+      if (!existing) return res.status(404).json({ message: "Certification not found" });
+      const updates = certificationWriteSchema.partial().parse(req.body);
+      res.json(await storage.updateCertification(id, updates));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res
+          .status(400)
+          .json({ message: "Invalid certification data", errors: error.errors });
+      }
+      console.error("Admin update cert error:", error);
+      res.status(500).json({ message: "Error updating certification" });
+    }
+  });
+
+  app.delete("/api/admin/certifications/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const existing = await storage.getCertification(id);
+      if (!existing) return res.status(404).json({ message: "Certification not found" });
+      await storage.deleteCertification(id);
+      res.json({ message: "Certification deleted" });
+    } catch (error) {
+      console.error("Admin delete cert error:", error);
+      res.status(500).json({ message: "Error deleting certification" });
+    }
+  });
+
+  // Update a user's account fields (role / profile). Admins can't demote
+  // themselves to avoid locking everyone out.
+  app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const target = await storage.getUser(id);
+      if (!target) return res.status(404).json({ message: "User not found" });
+
+      const schema = z.object({
+        isAdmin: z.boolean().optional(),
+        name: z.string().max(200).nullish(),
+        employeeNumber: z.string().max(100).nullish(),
+      });
+      const updates = schema.parse(req.body);
+
+      if (
+        updates.isAdmin === false &&
+        id === req.session.userId
+      ) {
+        return res
+          .status(400)
+          .json({ message: "You can't remove your own admin access" });
+      }
+
+      const [updated] = await db
+        .update(users)
+        .set(updates)
+        .where(eq(users.id, id))
+        .returning();
+      res.json(sanitizeUser(updated));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      console.error("Admin update user error:", error);
+      res.status(500).json({ message: "Error updating user" });
+    }
+  });
+
+  // Generate a password-reset link for a user (admin hands it to them).
+  app.post("/api/admin/users/:id/reset-password", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const target = await storage.getUser(id);
+      if (!target) return res.status(404).json({ message: "User not found" });
+
+      const resetToken = randomUUID();
+      const resetTokenExpiry = add(new Date(), { hours: 24 });
+      await db
+        .update(users)
+        .set({ resetToken, resetTokenExpiry })
+        .where(eq(users.id, id));
+      const resetUrl = `${getBaseUrl()}/reset-password/${resetToken}`;
+      res.json({ resetUrl, expiresInHours: 24 });
+    } catch (error) {
+      console.error("Admin reset password error:", error);
+      res.status(500).json({ message: "Error generating reset link" });
+    }
+  });
+
+  // ---- Impersonation ("view as user") ----
+  app.post("/api/admin/impersonate/:userId", requireAdmin, async (req, res) => {
+    try {
+      const targetId = parseInt(req.params.userId, 10);
+      if (!Number.isFinite(targetId)) {
+        return res.status(400).json({ message: "Invalid id" });
+      }
+      if (targetId === req.session.userId) {
+        return res.status(400).json({ message: "You're already this user" });
+      }
+      const target = await storage.getUser(targetId);
+      if (!target) return res.status(404).json({ message: "User not found" });
+
+      // Stash the real admin id, then become the target for all userId-scoped
+      // routes. Admin-only routes self-lock because requireAdmin re-checks.
+      req.session.adminUserId = req.session.userId;
+      req.session.userId = targetId;
+      req.session.save((err) => {
+        if (err) {
+          console.error("Impersonate save error:", err);
+          return res.status(500).json({ message: "Error starting impersonation" });
+        }
+        res.json({ ok: true, userId: targetId });
+      });
+    } catch (error) {
+      console.error("Impersonate error:", error);
+      res.status(500).json({ message: "Error starting impersonation" });
+    }
+  });
+
+  app.post("/api/admin/stop-impersonate", async (req, res) => {
+    try {
+      const adminId = req.session.adminUserId;
+      if (!adminId) {
+        return res.status(400).json({ message: "Not impersonating" });
+      }
+      req.session.userId = adminId;
+      delete req.session.adminUserId;
+      req.session.save((err) => {
+        if (err) {
+          console.error("Stop impersonate save error:", err);
+          return res.status(500).json({ message: "Error exiting impersonation" });
+        }
+        res.json({ ok: true, userId: adminId });
+      });
+    } catch (error) {
+      console.error("Stop impersonate error:", error);
+      res.status(500).json({ message: "Error exiting impersonation" });
+    }
+  });
+
   // Create an admin user if none exists
   // This is mainly for development purposes
   const setupAdmin = async () => {
@@ -1619,22 +1964,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ----- Import from signed log routes -----
-  const upload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB
-  });
-
-  const ALLOWED_IMPORT_MIMES = new Set([
-    "application/pdf",
-    "image/jpeg",
-    "image/jpg",
-    "image/png",
-    "image/webp",
-    "image/heic",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-excel",
-  ]);
-
   // Upload a signed-log file, run AI extraction, return parsed rows + key.
   app.post(
     "/api/imports/extract",

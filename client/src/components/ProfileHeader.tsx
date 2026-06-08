@@ -14,6 +14,7 @@ import {
 import { generatePdf } from "@/lib/pdf";
 import { ConnectivityChip } from "@/components/ConnectivityChip";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AdminViewToggle } from "@/components/admin/AdminViewToggle";
 import { useOnlineStatus } from "@/lib/offline/online";
 
 interface ProfileHeaderProps {
@@ -114,6 +115,7 @@ export function ProfileHeader({ user, verifiedEntries }: ProfileHeaderProps) {
           </div>
 
           <div className="flex items-center space-x-3">
+            <AdminViewToggle />
             <span className="text-sm text-muted-foreground hidden sm:inline">
               {user.email}
             </span>

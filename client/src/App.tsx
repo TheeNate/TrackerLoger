@@ -17,6 +17,7 @@ import SignersPage from "@/pages/SignersPage";
 import VerifyPage from "@/pages/VerifyPage";
 import BatchVerifyPage from "@/pages/BatchVerifyPage";
 import PublicProfilePage from "@/pages/PublicProfilePage";
+import { ImpersonationBanner } from "@/components/admin/ImpersonationBanner";
 import SuccessPage from "@/pages/SuccessPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NewPasswordPage from "@/pages/NewPasswordPage";
@@ -86,6 +87,7 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
+            <ImpersonationBanner />
             <Router />
             <AuthedPrompts />
           </TooltipProvider>
