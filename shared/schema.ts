@@ -107,7 +107,9 @@ export const entries = pgTable("entries", {
   hours: real("hours").notNull(),
   verified: boolean("verified").default(false),
   verifiedBy: text("verified_by"),
-  verificationToken: uuid("verification_token").unique(),
+  // Not unique: a batch verification request stamps one shared token across
+  // multiple entries so the supervisor can sign off on them with one link.
+  verificationToken: uuid("verification_token"),
   verifiedAt: timestamp("verified_at"),
   createdAt: timestamp("created_at").defaultNow(),
   // Digital signature fields

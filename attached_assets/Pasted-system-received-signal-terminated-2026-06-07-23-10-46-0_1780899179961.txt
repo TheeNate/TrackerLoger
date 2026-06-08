@@ -1,0 +1,156 @@
+system: received signal terminated
+
+2026-06-07 23:10:46.01
+e2a1b072
+User
+6:10:46 AM [express] POST /api/imports/extract 200 in 39017ms :: {"sourceDocumentKey":"/objects/impo…
+
+2026-06-07 23:10:58.60
+e2a1b072
+User
+Request from host: ojt.n8ai.io, origin: https://ojt.n8ai.io
+
+2026-06-07 23:10:58.60
+e2a1b072
+User
+Authentication check: session ID yJvZk1Lbf_QKBKICHgfDtl3S3etyKxGN, user ID: 11
+
+2026-06-07 23:10:58.89
+e2a1b072
+User
+6:10:58 AM [express] POST /api/imports/commit 201 in 387ms :: {"created":[{"id":125,"userId":11,"dat…
+
+2026-06-07 23:10:59.09
+e2a1b072
+User
+Request from host: ojt.n8ai.io, origin:
+
+2026-06-07 23:10:59.09
+e2a1b072
+User
+CORS: Rejected origin . Allowed origins: https://ojt-log-tracker.replit.app, https://ojt.n8ai.io, http://localhost:5000, https://localhost:5000, http://127.0.0.1:5000, https://127.0.0.1:5000
+
+2026-06-07 23:10:59.19
+e2a1b072
+User
+6:10:59 AM [express] GET /api/entries 200 in 113ms :: [{"id":17,"userId":11,"date":"2026-04-25T00:00…
+
+2026-06-07 23:11:48.97
+e2a1b072
+User
+Request from host: ojt.n8ai.io, origin:
+
+2026-06-07 23:11:48.97
+e2a1b072
+User
+CORS: Rejected origin . Allowed origins: https://ojt-log-tracker.replit.app, https://ojt.n8ai.io, http://localhost:5000, https://localhost:5000, http://127.0.0.1:5000, https://127.0.0.1:5000
+
+2026-06-07 23:11:49.02
+e2a1b072
+User
+6:11:49 AM [express] GET /api/supervisors 304 in 168ms :: [{"id":3,"userId":11,"name":"Nathan Bates"…
+
+2026-06-07 23:12:14.08
+e2a1b072
+System
+system: received signal terminated
+
+2026-06-07 23:12:15.26
+e2a1b072
+User
+Request from host: ojt.n8ai.io, origin: https://ojt.n8ai.io
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+at async NeonPreparedQuery.execute (file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:105:14)
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+hint: undefined,
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+query: 'update "entries" set "verification_token" = $1 where "entries"."id" = $2',
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+length: 279,
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+position: undefined,
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+code: '23505',
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+detail: 'Key (verification_token)=(13b5c83f-f9d0-4cf6-9f1d-978bbad19e78) already exists.',
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+at async NeonPreparedQuery.queryWithCache (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/session.js:39:16)
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+severity: 'ERROR',
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+params: [ '13b5c83f-f9d0-4cf6-9f1d-978bbad19e78', 23 ],
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+params: 13b5c83f-f9d0-4cf6-9f1d-978bbad19e78,23
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+at async Promise.all (index 5)
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+at async file:///home/runner/workspace/dist/index.js:3769:7 {
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+at async NeonPreparedQuery.execute (file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:105:14)
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:106:16
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+cause: error: duplicate key value violates unique constraint "entries_verification_token_unique"
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+
+2026-06-07 23:12:15.56
+e2a1b072
+User
+at async file:///home/runner/workspace/dist/index.js:3769:7 {
