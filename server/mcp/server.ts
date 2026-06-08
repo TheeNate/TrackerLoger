@@ -16,6 +16,7 @@ import { db } from "../db";
 import {
   entries as entriesTable,
   ropeHours as ropeHoursTable,
+  users as usersTable,
   insertEntrySchema,
   insertRopeHoursSchema,
   insertSupervisorSchema,
@@ -30,7 +31,10 @@ import {
   sendBatchVerificationRequest,
   sendRopeHoursVerificationRequest,
   sendVerificationRequest,
+  sendInviteEmail,
 } from "../email";
+import { hash } from "bcrypt";
+import { ObjectStorageService } from "../replit_integrations/object_storage/objectStorage";
 import { fillForm } from "../forms/filler";
 import { isFormId, registry } from "../forms/registry";
 import {
@@ -72,6 +76,101 @@ function stashExport(bytes: Buffer, filename: string): string {
 }
 
 const VALID_METHODS = Object.keys(NDTMethods) as Array<keyof typeof NDTMethods>;
+
+// Shared object storage for cert/document uploads (base64 over MCP).
+const objectStorageService = new ObjectStorageService();
+const ALLOWED_DOC_MIMES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+]);
+const MAX_DOC_BYTES = 15 * 1024 * 1024;
+
+const genTempPassword = () => randomBytes(9).toString("base64url").slice(0, 12);
+
+function sanitizeUserRow(u: typeof usersTable.$inferSelect) {
+  const { password: _p, resetToken: _r, resetTokenExpiry: _e, ...safe } = u;
+  return safe;
+}
+
+// Decode a base64 file payload and upload it to object storage, returning the
+// stored key + original name. Throws on bad type / size.
+async function uploadDocBase64(
+  folder: string,
+  file: { filename: string; contentBase64: string; mimeType: string },
+) {
+  if (!ALLOWED_DOC_MIMES.has(file.mimeType)) {
+    throw new Error("unsupported mimeType (use PDF, JPG, PNG, WEBP, or HEIC)");
+  }
+  const buffer = Buffer.from(file.contentBase64, "base64");
+  if (buffer.length === 0) throw new Error("empty file content");
+  if (buffer.length > MAX_DOC_BYTES) throw new Error("file too large (max 15MB)");
+  const safe = file.filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const documentKey = await objectStorageService.uploadBuffer(
+    `${folder}/${randomUUID()}-${safe}`,
+    buffer,
+    file.mimeType,
+  );
+  return { documentKey, documentName: file.filename };
+}
+
+// Reusable zod shape for certification create tools.
+const certFileSchema = z
+  .object({
+    filename: z.string().min(1),
+    contentBase64: z.string().min(1),
+    mimeType: z.string().min(1),
+  })
+  .describe("Optional certificate file to attach (base64-encoded PDF or image)");
+
+const certInputShape = {
+  name: z.string().min(1).max(200).describe("e.g. 'ASNT NDT Level II'"),
+  issuingBody: z.string().max(200).optional().describe("ASNT / IRATA / SPRAT / employer"),
+  method: z.string().max(100).optional().describe("discipline, e.g. UT"),
+  level: z.string().max(100).optional().describe("e.g. Level II"),
+  certNumber: z.string().max(200).optional(),
+  issueDate: z.string().optional().describe("ISO date"),
+  expiryDate: z.string().optional().describe("ISO date"),
+  file: certFileSchema.optional(),
+};
+
+// Build a certification insert record for `ownerId`, uploading the file if given.
+async function buildCertRecord(
+  ownerId: number,
+  input: {
+    name: string;
+    issuingBody?: string;
+    method?: string;
+    level?: string;
+    certNumber?: string;
+    issueDate?: string;
+    expiryDate?: string;
+    file?: { filename: string; contentBase64: string; mimeType: string };
+  },
+) {
+  let documentKey: string | null = null;
+  let documentName: string | null = null;
+  if (input.file) {
+    const up = await uploadDocBase64(`certifications/${ownerId}`, input.file);
+    documentKey = up.documentKey;
+    documentName = up.documentName;
+  }
+  return {
+    userId: ownerId,
+    name: input.name.trim(),
+    method: input.method?.trim() || null,
+    level: input.level?.trim() || null,
+    issuingBody: input.issuingBody?.trim() || null,
+    certNumber: input.certNumber?.trim() || null,
+    issueDate: input.issueDate ? new Date(input.issueDate) : null,
+    expiryDate: input.expiryDate ? new Date(input.expiryDate) : null,
+    documentKey,
+    documentName,
+  };
+}
 
 function ndtTotalsFromEntries(entries: Entry[]) {
   const byMethod = new Map<string, { totalHours: number; verifiedHours: number; count: number }>();
@@ -552,6 +651,207 @@ function buildServer(userId: number): McpServer {
         `PDF generated (${bytes.length} bytes). Download once within 15 minutes: ${url}`,
         { url, filename, byteSize: bytes.length, expiresInSec: Math.floor(EXPORT_TTL_MS / 1000) },
       );
+    },
+  );
+
+  // -------- Certifications (own profile) --------
+  server.tool(
+    "list_certifications",
+    "List the authenticated user's certifications (name, issuing body, level, dates, whether a file is attached).",
+    {},
+    async () => {
+      const certs = await storage.getCertifications(userId);
+      return ok(`${certs.length} certifications.`, { certifications: certs });
+    },
+  );
+
+  server.tool(
+    "create_certification",
+    "Add a certification to your profile. Optionally attach the certificate file as a base64-encoded PDF or image.",
+    certInputShape,
+    async (input) => {
+      try {
+        const rec = await buildCertRecord(userId, input);
+        const created = await storage.createCertification(rec);
+        return ok(
+          `Added certification "${created.name}" (id ${created.id})${created.documentKey ? " with file" : ""}.`,
+          { certification: created },
+        );
+      } catch (e) {
+        return err(e instanceof Error ? e.message : "could not create certification");
+      }
+    },
+  );
+
+  server.tool(
+    "delete_certification",
+    "Delete one of your certifications.",
+    { id: z.number().int().positive() },
+    async ({ id }) => {
+      const existing = await storage.getCertification(id);
+      if (!existing) return err("certification not found");
+      if (existing.userId !== userId) return err("certification does not belong to you");
+      await storage.deleteCertification(id);
+      return ok(`Deleted certification ${id}.`);
+    },
+  );
+
+  // -------- Admin (only when the token belongs to an admin) --------
+  const ensureAdmin = async () => {
+    const me = await storage.getUser(userId);
+    return me?.isAdmin ? me : null;
+  };
+
+  server.tool(
+    "admin_list_users",
+    "[Admin] List all users in the system (id, name, email, employee number, admin flag).",
+    {},
+    async () => {
+      if (!(await ensureAdmin())) return err("admin only");
+      const all = await db.select().from(usersTable);
+      return ok(`${all.length} users.`, { users: all.map(sanitizeUserRow) });
+    },
+  );
+
+  server.tool(
+    "admin_get_user",
+    "[Admin] Get one user's full record: profile, hour totals, and their entries, rope hours, and certifications.",
+    { userId: z.number().int().positive() },
+    async ({ userId: targetId }) => {
+      if (!(await ensureAdmin())) return err("admin only");
+      const target = await storage.getUser(targetId);
+      if (!target) return err("user not found");
+      const [entries, rope, certs] = await Promise.all([
+        storage.getEntries(targetId),
+        storage.getRopeHours(targetId),
+        storage.getCertifications(targetId),
+      ]);
+      return ok(
+        `${target.name ?? target.email}: ${entries.length} OJT entries, ${rope.length} rope records, ${certs.length} certs.`,
+        {
+          user: sanitizeUserRow(target),
+          ojtTotals: ndtTotalsFromEntries(entries),
+          ropeTotals: ropeTotalsFromRows(rope),
+          entries,
+          ropeHours: rope,
+          certifications: certs,
+        },
+      );
+    },
+  );
+
+  server.tool(
+    "admin_create_user",
+    "[Admin] Create a new non-admin user with a generated temporary password. Set sendInvite=true to email them their login immediately. Always returns the temp password so you can share it manually.",
+    {
+      email: z.string().email().max(255),
+      name: z.string().max(200).optional(),
+      employeeNumber: z.string().max(100).optional(),
+      sendInvite: z.boolean().optional().describe("Email the user their login now"),
+    },
+    async ({ email, name, employeeNumber, sendInvite }) => {
+      if (!(await ensureAdmin())) return err("admin only");
+      const normalized = email.trim().toLowerCase();
+      const existing = await storage.getUserByEmail(normalized);
+      if (existing) return err("a user with that email already exists");
+
+      const tempPassword = genTempPassword();
+      const hashed = await hash(tempPassword, 10);
+      const [created] = await db
+        .insert(usersTable)
+        .values({
+          email: normalized,
+          password: hashed,
+          name: name ?? null,
+          employeeNumber: employeeNumber ?? null,
+          isAdmin: false,
+        })
+        .returning();
+
+      let invited = false;
+      if (sendInvite) invited = await sendInviteEmail(normalized, tempPassword, created.name);
+      return ok(
+        `Created ${normalized} (id ${created.id}). Temp password: ${tempPassword}.${
+          sendInvite ? (invited ? " Invite emailed." : " Invite email failed — share manually.") : ""
+        }`,
+        { user: sanitizeUserRow(created), tempPassword, invited },
+      );
+    },
+  );
+
+  server.tool(
+    "admin_invite_user",
+    "[Admin] Set a fresh temporary password for a user and email them their login details. Returns the temp password.",
+    { userId: z.number().int().positive() },
+    async ({ userId: targetId }) => {
+      if (!(await ensureAdmin())) return err("admin only");
+      const target = await storage.getUser(targetId);
+      if (!target) return err("user not found");
+      const tempPassword = genTempPassword();
+      const hashed = await hash(tempPassword, 10);
+      await db.update(usersTable).set({ password: hashed }).where(eq(usersTable.id, targetId));
+      const sent = await sendInviteEmail(target.email, tempPassword, target.name);
+      return ok(
+        `Invite for ${target.email}: ${sent ? "emailed" : "email failed — share manually"}. Temp password: ${tempPassword}.`,
+        { tempPassword, sent },
+      );
+    },
+  );
+
+  server.tool(
+    "admin_set_admin",
+    "[Admin] Grant or revoke admin access for a user. You can't revoke your own admin access.",
+    {
+      userId: z.number().int().positive(),
+      isAdmin: z.boolean(),
+    },
+    async ({ userId: targetId, isAdmin }) => {
+      if (!(await ensureAdmin())) return err("admin only");
+      if (!isAdmin && targetId === userId) return err("you can't remove your own admin access");
+      const target = await storage.getUser(targetId);
+      if (!target) return err("user not found");
+      const [updated] = await db
+        .update(usersTable)
+        .set({ isAdmin })
+        .where(eq(usersTable.id, targetId))
+        .returning();
+      return ok(`${updated.email} is now ${isAdmin ? "an admin" : "a standard user"}.`, {
+        user: sanitizeUserRow(updated),
+      });
+    },
+  );
+
+  server.tool(
+    "admin_add_certification",
+    "[Admin] Add a certification to another user's profile, optionally attaching the certificate file as base64.",
+    { userId: z.number().int().positive(), ...certInputShape },
+    async ({ userId: targetId, ...input }) => {
+      if (!(await ensureAdmin())) return err("admin only");
+      const target = await storage.getUser(targetId);
+      if (!target) return err("user not found");
+      try {
+        const rec = await buildCertRecord(targetId, input);
+        const created = await storage.createCertification(rec);
+        return ok(
+          `Added "${created.name}" to ${target.email} (cert id ${created.id}).`,
+          { certification: created },
+        );
+      } catch (e) {
+        return err(e instanceof Error ? e.message : "could not create certification");
+      }
+    },
+  );
+
+  server.tool(
+    "admin_delete_certification",
+    "[Admin] Delete any user's certification by id.",
+    { id: z.number().int().positive() },
+    async ({ id }) => {
+      if (!(await ensureAdmin())) return err("admin only");
+      const existing = await storage.getCertification(id);
+      if (!existing) return err("certification not found");
+      await storage.deleteCertification(id);
+      return ok(`Deleted certification ${id}.`);
     },
   );
 

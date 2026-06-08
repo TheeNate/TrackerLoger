@@ -22,8 +22,6 @@ vi.mock("connect-pg-simple", () => ({
   default: () => class { constructor(_opts: unknown) {} },
 }));
 
-vi.mock("../server/db", () => ({ pool: {}, db: {} }));
-
 const emailMock = vi.hoisted(() => ({
   getBaseUrl: () => "http://localhost:5000",
   sendEmail: vi.fn(),
