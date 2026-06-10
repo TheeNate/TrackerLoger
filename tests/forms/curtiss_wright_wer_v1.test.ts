@@ -3,8 +3,8 @@ import path from "path";
 import { PDFDocument } from "pdf-lib";
 import type { Entry, User } from "@shared/schema";
 import { cwAdapter } from "../../server/forms/adapters/curtiss_wright_wer_v1";
-import { EmptyExportError, FormCapacityError, NothingToExportError } from "../../server/forms/types";
-import { fillForm } from "../../server/forms/filler";
+import { EmptyExportError, NothingToExportError } from "../../server/forms/types";
+import { fillForm, fillFormPages } from "../../server/forms/filler";
 
 function makeProfile(overrides: Partial<User> = {}): User {
   return {
@@ -34,7 +34,7 @@ function makeEntry(overrides: Partial<Entry>): Entry {
 describe("cwAdapter — week bucketing", () => {
   it("buckets Sunday and Saturday in the same Sun-Sat week", () => {
     // 2026-05-03 is Sunday UTC; 2026-05-09 is Saturday UTC — same week ending 5/9.
-    const out = cwAdapter({
+    const [out] = cwAdapter({
       entries: [
         makeEntry({ id: 1, date: new Date("2026-05-03T00:00:00Z"), method: "MT", hours: 2 }),
         makeEntry({ id: 2, date: new Date("2026-05-09T00:00:00Z"), method: "PT", hours: 3 }),
@@ -48,7 +48,7 @@ describe("cwAdapter — week bucketing", () => {
   });
 
   it("fills two weeks in chronological order", () => {
-    const out = cwAdapter({
+    const [out] = cwAdapter({
       entries: [
         makeEntry({ id: 1, date: new Date("2026-05-04T00:00:00Z"), method: "MT", hours: 2 }), // Mon, week of 5/3
         makeEntry({ id: 2, date: new Date("2026-05-11T00:00:00Z"), method: "PT", hours: 3 }), // Mon, week of 5/10
@@ -62,7 +62,7 @@ describe("cwAdapter — week bucketing", () => {
   });
 
   it("aliases UT_THK to UTT column", () => {
-    const out = cwAdapter({
+    const [out] = cwAdapter({
       entries: [makeEntry({ method: "UT_THK", hours: 2 })],
       profile: makeProfile(),
     });
@@ -71,7 +71,7 @@ describe("cwAdapter — week bucketing", () => {
   });
 
   it("sums multiple same-day same-method entries into one cell", () => {
-    const out = cwAdapter({
+    const [out] = cwAdapter({
       entries: [
         makeEntry({ id: 1, date: new Date("2026-05-04T00:00:00Z"), method: "MT", hours: 2 }),
         makeEntry({ id: 2, date: new Date("2026-05-04T00:00:00Z"), method: "MT", hours: 1.5 }),
@@ -84,7 +84,7 @@ describe("cwAdapter — week bucketing", () => {
   });
 
   it("populates per-week TOTAL row", () => {
-    const out = cwAdapter({
+    const [out] = cwAdapter({
       entries: [
         makeEntry({ id: 1, date: new Date("2026-05-04T00:00:00Z"), method: "MT", hours: 2 }),
         makeEntry({ id: 2, date: new Date("2026-05-05T00:00:00Z"), method: "PT", hours: 3 }),
@@ -99,7 +99,7 @@ describe("cwAdapter — week bucketing", () => {
   });
 
   it("fills the name header from profile", () => {
-    const out = cwAdapter({
+    const [out] = cwAdapter({
       entries: [makeEntry({})],
       profile: makeProfile({ name: "CW Tech" }),
     });
@@ -108,7 +108,7 @@ describe("cwAdapter — week bucketing", () => {
   });
 
   it("applies headerOverrides on top of profile + computed week endings", () => {
-    const out = cwAdapter({
+    const [out] = cwAdapter({
       entries: [makeEntry({})],
       profile: makeProfile(),
       headerOverrides: { job_number: "JOB-99", name: "Override Tech" },
@@ -124,17 +124,20 @@ describe("cwAdapter — bounds and unmapped methods", () => {
       .toThrow(EmptyExportError);
   });
 
-  it("throws FormCapacityError when entries span 3 calendar weeks", () => {
+  it("paginates a third calendar week onto a second page (2 weeks per page)", () => {
     const entries = [
-      makeEntry({ id: 1, date: new Date("2026-05-04T00:00:00Z") }),  // week 1
-      makeEntry({ id: 2, date: new Date("2026-05-11T00:00:00Z") }),  // week 2
-      makeEntry({ id: 3, date: new Date("2026-05-18T00:00:00Z") }),  // week 3
+      makeEntry({ id: 1, date: new Date("2026-05-04T00:00:00Z"), method: "MT", hours: 1 }),  // week 1
+      makeEntry({ id: 2, date: new Date("2026-05-11T00:00:00Z"), method: "MT", hours: 1 }),  // week 2
+      makeEntry({ id: 3, date: new Date("2026-05-18T00:00:00Z"), method: "MT", hours: 1 }),  // week 3
     ];
-    expect(() => cwAdapter({ entries, profile: makeProfile() }))
-      .toThrowError(expect.objectContaining({
-        name: "FormCapacityError",
-        max: 2, got: 3, unit: "weeks",
-      }));
+    const pages = cwAdapter({ entries, profile: makeProfile() });
+    expect(pages).toHaveLength(2);
+    expect(pages[0].week1_ending).toBe("05/09/2026");
+    expect(pages[0].week2_ending).toBe("05/16/2026");
+    // Week 3 spills onto page 2's week1 block; page 2 has no week2.
+    expect(pages[1].week1_ending).toBe("05/23/2026");
+    expect(pages[1].week2_ending).toBeUndefined();
+    expect(pages[1].name).toBe("Jane Tech"); // header repeats per page
   });
 
   it("throws NothingToExportError when every entry uses an unsupported method", () => {
@@ -149,7 +152,7 @@ describe("cwAdapter — bounds and unmapped methods", () => {
   });
 
   it("skips unmapped methods silently when at least one mapped entry exists", () => {
-    const out = cwAdapter({
+    const [out] = cwAdapter({
       entries: [
         makeEntry({ id: 1, method: "MT",  hours: 2 }),
         makeEntry({ id: 2, method: "PMI", hours: 5 }), // unmapped — should be ignored
@@ -162,7 +165,7 @@ describe("cwAdapter — bounds and unmapped methods", () => {
   });
 
   it("leaves week2 fields entirely absent when only one week of entries", () => {
-    const out = cwAdapter({
+    const [out] = cwAdapter({
       entries: [makeEntry({ id: 1, method: "MT", hours: 2 })],
       profile: makeProfile(),
     });
@@ -189,7 +192,7 @@ describe("cwAdapter — round-trip through filler", () => {
       makeEntry({ id: 5, date: new Date("2026-05-13T00:00:00Z"), method: "VWE",    hours: 2 }),
     ];
 
-    const expected = cwAdapter({ entries, profile, headerOverrides: { job_number: "JOB-42" } });
+    const [expected] = cwAdapter({ entries, profile, headerOverrides: { job_number: "JOB-42" } });
     const bytes = await fillForm(CW_BLANK, expected);
 
     const reopened = await PDFDocument.load(bytes);
@@ -199,5 +202,23 @@ describe("cwAdapter — round-trip through filler", () => {
       const got = form.getTextField(name).getText() ?? "";
       expect(got, `field ${name}`).toBe(value);
     }
+  });
+
+  it("renders five calendar weeks as 3 editable pages (2 + 2 + 1)", async () => {
+    // One mapped entry per week for 5 consecutive Mondays.
+    const entries = Array.from({ length: 5 }, (_, i) =>
+      makeEntry({ id: i + 1, method: "MT", hours: 1, date: new Date(Date.UTC(2026, 4, 4 + i * 7)) }));
+
+    const pages = cwAdapter({ entries, profile: makeProfile() });
+    expect(pages).toHaveLength(3);
+
+    const bytes = await fillFormPages(CW_BLANK, pages);
+    const reopened = await PDFDocument.load(bytes);
+    expect(reopened.getPageCount()).toBe(3);
+
+    const form = reopened.getForm();
+    expect(form.getTextField("week1_ending__pg0").getText()).toBe("05/09/2026");
+    expect(form.getTextField("week2_ending__pg1").getText()).toBe("05/30/2026");
+    expect(form.getTextField("week1_ending__pg2").getText()).toBe("06/06/2026");
   });
 });

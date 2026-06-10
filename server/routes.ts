@@ -43,7 +43,7 @@ import {
   ObjectNotFoundError,
 } from "./replit_integrations/object_storage/objectStorage";
 import { extractOJTRows, extractRopeRows } from "./extraction";
-import { fillForm } from "./forms/filler";
+import { fillFormPages } from "./forms/filler";
 import { isFormId, registry } from "./forms/registry";
 import {
   EmptyExportError,
@@ -728,7 +728,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const entryDef = registry[form_id];
 
-    let fieldValues;
+    let pages;
     let earliestMs: number, latestMs: number;
     try {
       if (entryDef.kind === "ojt") {
@@ -740,7 +740,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             code: "entry_not_found",
           });
         }
-        fieldValues = entryDef.adapter({
+        pages = entryDef.adapter({
           entries: selected,
           profile,
           headerOverrides: header_overrides,
@@ -758,7 +758,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         const supervisors = await storage.getSupervisors(userId);
-        fieldValues = entryDef.adapter({
+        pages = entryDef.adapter({
           ropeHours: selected,
           profile,
           supervisors,
@@ -788,7 +788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     let bytes;
     try {
-      bytes = await fillForm(entryDef.blankPath, fieldValues);
+      bytes = await fillFormPages(entryDef.blankPath, pages);
     } catch (err) {
       console.error(`fillForm failed for ${form_id}:`, err);
       return res.status(500).json({ message: "Form fill failed", code: "internal_error" });

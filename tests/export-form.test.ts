@@ -122,15 +122,17 @@ describe("POST /api/export-form", () => {
     expect(res.body.slice(0, 4).toString()).toBe("%PDF");
   });
 
-  it("returns 422 with form_capacity when MISTRAS gets more than 16 entries", async () => {
-    const entries = Array.from({ length: 17 }, (_, i) =>
-      makeEntry(i + 1, "MT", `2026-05-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`));
+  it("returns a multi-page PDF when MISTRAS gets more than 16 entries (no row cap)", async () => {
+    const entries = Array.from({ length: 40 }, (_, i) =>
+      makeEntry(i + 1, "MT", new Date(Date.UTC(2026, 0, 1 + i)).toISOString()));
     storageMock.getEntries.mockResolvedValue(entries);
     const res = await request(app)
       .post("/api/export-form")
-      .send({ form_id: "mistras_ojt_v1", entry_ids: entries.map((e) => e.id) });
-    expect(res.status).toBe(422);
-    expect(res.body.code).toBe("form_capacity");
+      .send({ form_id: "mistras_ojt_v1", entry_ids: entries.map((e) => e.id) })
+      .buffer(true);
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/application\/pdf/);
+    expect(res.body.slice(0, 4).toString()).toBe("%PDF");
   });
 });
 
@@ -187,16 +189,18 @@ describe("POST /api/export-form — rope hours forms", () => {
     expect(res.body.code).toBe("entry_not_found");
   });
 
-  it("returns 422 form_capacity for SPRAT with more than 6 rope hours", async () => {
-    const rope = Array.from({ length: 7 }, (_, i) =>
-      makeRope(i + 1, `2026-05-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`));
+  it("returns a multi-page PDF for SPRAT with more than 6 rope hours (no row cap)", async () => {
+    const rope = Array.from({ length: 14 }, (_, i) =>
+      makeRope(i + 1, new Date(Date.UTC(2026, 0, 1 + i)).toISOString()));
     storageMock.getRopeHours.mockResolvedValue(rope);
     storageMock.getSupervisors.mockResolvedValue([]);
 
     const res = await request(app)
       .post("/api/export-form")
-      .send({ form_id: "sprat_log_v1", entry_ids: rope.map((r) => r.id) });
-    expect(res.status).toBe(422);
-    expect(res.body.code).toBe("form_capacity");
+      .send({ form_id: "sprat_log_v1", entry_ids: rope.map((r) => r.id) })
+      .buffer(true);
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/application\/pdf/);
+    expect(res.body.slice(0, 4).toString()).toBe("%PDF");
   });
 });

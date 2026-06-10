@@ -3,8 +3,8 @@ import path from "path";
 import { PDFDocument } from "pdf-lib";
 import type { RopeHours, Supervisor, User } from "@shared/schema";
 import { irataAdapter } from "../../server/forms/adapters/irata_log_v1";
-import { EmptyExportError, FormCapacityError } from "../../server/forms/types";
-import { fillForm } from "../../server/forms/filler";
+import { EmptyExportError } from "../../server/forms/types";
+import { fillForm, fillFormPages } from "../../server/forms/filler";
 
 function makeProfile(overrides: Partial<User> = {}): User {
   return {
@@ -52,7 +52,7 @@ const IRATA_BLANK = path.resolve(
 
 describe("irataAdapter — core mapping", () => {
   it("writes row fields including max_height and task_details from workDetails", () => {
-    const out = irataAdapter({
+    const [out] = irataAdapter({
       ropeHours: [makeRope({
         employer: "Vendor Corp",
         workDetails: "Tower painting",
@@ -71,7 +71,7 @@ describe("irataAdapter — core mapping", () => {
   });
 
   it("falls back to skills for task_details when workDetails is null", () => {
-    const out = irataAdapter({
+    const [out] = irataAdapter({
       ropeHours: [makeRope({ workDetails: null, skills: "rebelay, ascending" })],
       profile: makeProfile(),
       supervisors: [],
@@ -80,7 +80,7 @@ describe("irataAdapter — core mapping", () => {
   });
 
   it("appends IRATA number when supervisor lookup succeeds", () => {
-    const out = irataAdapter({
+    const [out] = irataAdapter({
       ropeHours: [makeRope({ verifiedBy: "Supervisor Sam" })],
       profile: makeProfile(),
       supervisors: [makeSupervisor({ name: "Supervisor Sam", irataNumber: "IR-12345" })],
@@ -89,7 +89,7 @@ describe("irataAdapter — core mapping", () => {
   });
 
   it("uses verifiedBy alone when no supervisor matches", () => {
-    const out = irataAdapter({
+    const [out] = irataAdapter({
       ropeHours: [makeRope({ verifiedBy: "Unknown" })],
       profile: makeProfile(),
       supervisors: [],
@@ -98,7 +98,7 @@ describe("irataAdapter — core mapping", () => {
   });
 
   it("does NOT emit hours_this_page or running_total fields (IRATA has neither)", () => {
-    const out = irataAdapter({
+    const [out] = irataAdapter({
       ropeHours: [makeRope({ hours: 4 })],
       profile: makeProfile(),
       supervisors: [],
@@ -108,7 +108,7 @@ describe("irataAdapter — core mapping", () => {
   });
 
   it("accepts headerOverrides.running_total_hours", () => {
-    const out = irataAdapter({
+    const [out] = irataAdapter({
       ropeHours: [makeRope({})],
       profile: makeProfile(),
       supervisors: [],
@@ -124,11 +124,14 @@ describe("irataAdapter — bounds", () => {
       .toThrow(EmptyExportError);
   });
 
-  it("throws FormCapacityError on more than 7 rope hours", () => {
+  it("paginates more than 7 rope hours across pages (7 + remainder)", () => {
     const ropeHours = Array.from({ length: 8 }, (_, i) =>
-      makeRope({ id: i + 1, startDate: new Date(`2026-05-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`), endDate: new Date(`2026-05-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`) }));
-    expect(() => irataAdapter({ ropeHours, profile: makeProfile(), supervisors: [] }))
-      .toThrowError(expect.objectContaining({ name: "FormCapacityError", max: 7, got: 8, unit: "rows" }));
+      makeRope({ id: i + 1, startDate: new Date(Date.UTC(2026, 0, 1 + i)), endDate: new Date(Date.UTC(2026, 0, 1 + i)) }));
+    const pages = irataAdapter({ ropeHours, profile: makeProfile(), supervisors: [] });
+    expect(pages).toHaveLength(2); // 7 + 1
+    expect(pages[0].row_7_date).toBeDefined();
+    expect(pages[1].row_1_date).toBeDefined();
+    expect(pages[1].row_2_date).toBeUndefined();
   });
 });
 
@@ -139,7 +142,7 @@ describe("irataAdapter — round-trip", () => {
       makeRope({ id: 2, hours: 8, employer: "Vendor", workDetails: "Painting",   location: "Houston", maxHeight: "50m", startDate: new Date("2026-05-06T00:00:00Z"), endDate: new Date("2026-05-06T00:00:00Z") }),
     ];
 
-    const expected = irataAdapter({
+    const [expected] = irataAdapter({
       ropeHours,
       profile: makeProfile(),
       supervisors: [],
@@ -153,5 +156,23 @@ describe("irataAdapter — round-trip", () => {
       const got = form.getTextField(name).getText() ?? "";
       expect(got, `field ${name}`).toBe(value);
     }
+  });
+
+  it("renders 16 rope hours as 3 editable pages (7 + 7 + 2)", async () => {
+    const ropeHours: RopeHours[] = Array.from({ length: 16 }, (_, i) =>
+      makeRope({ id: i + 1, hours: 1, employer: `Emp ${i + 1}`, location: `Loc ${i + 1}`,
+        startDate: new Date(Date.UTC(2026, 0, 1 + i)), endDate: new Date(Date.UTC(2026, 0, 1 + i)) }));
+
+    const pages = irataAdapter({ ropeHours, profile: makeProfile(), supervisors: [] });
+    expect(pages).toHaveLength(3);
+
+    const bytes = await fillFormPages(IRATA_BLANK, pages);
+    const reopened = await PDFDocument.load(bytes);
+    expect(reopened.getPageCount()).toBe(3);
+
+    const form = reopened.getForm();
+    expect(form.getTextField("row_1_employer__pg0").getText()).toBe("Emp 1");
+    expect(form.getTextField("row_7_employer__pg1").getText()).toBe("Emp 14");
+    expect(form.getTextField("row_2_employer__pg2").getText()).toBe("Emp 16");
   });
 });

@@ -48,6 +48,11 @@ export function ExportFormDialog({
     return selectedEntries.filter((e) => !supported.has(e.method)).length;
   }, [formId, selectedEntries]);
 
+  // MISTRAS fits 16 rows per page; longer exports paginate automatically.
+  // (Curtiss-Wright groups by week, so a row-based page count wouldn't apply.)
+  const mistrasPageCount =
+    formId === "mistras_ojt_v1" ? Math.ceil(selectedEntries.length / 16) : 1;
+
   async function handleDownload() {
     setDownloading(true);
     try {
@@ -130,6 +135,13 @@ export function ExportFormDialog({
             <p className="text-sm text-amber-700 bg-amber-50 p-2 rounded">
               {unmappedCount} of your selected entries use methods this form
               doesn&apos;t support and will be skipped.
+            </p>
+          )}
+
+          {mistrasPageCount > 1 && (
+            <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
+              {selectedEntries.length} rows will be split across {mistrasPageCount} pages
+              (16 per page).
             </p>
           )}
 

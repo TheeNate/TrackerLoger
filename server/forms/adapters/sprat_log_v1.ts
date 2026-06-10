@@ -1,5 +1,5 @@
 import type { RopeAdapter, FieldValues } from "../types";
-import { EmptyExportError, FormCapacityError } from "../types";
+import { chunk, EmptyExportError } from "../types";
 import type { Supervisor } from "@shared/schema";
 
 const MAX_ROWS = 6;
@@ -21,36 +21,35 @@ function findSupervisor(supervisors: Supervisor[], name: string | null): Supervi
 
 export const spratAdapter: RopeAdapter = ({ ropeHours, profile: _profile, supervisors, headerOverrides }) => {
   if (ropeHours.length === 0) throw new EmptyExportError();
-  if (ropeHours.length > MAX_ROWS) {
-    throw new FormCapacityError(MAX_ROWS, ropeHours.length, "rows");
-  }
 
-  const out: FieldValues = {};
   const sorted = [...ropeHours].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
-  let pageTotal = 0;
+  // One page per chunk of MAX_ROWS; hours_this_page totals each page's own rows.
+  return chunk(sorted, MAX_ROWS).map((pageRope) => {
+    const out: FieldValues = {};
+    let pageTotal = 0;
 
-  sorted.forEach((rope, i) => {
-    const rowNum = i + 1;
-    out[`row_${rowNum}_date`] = formatDateRange(rope.startDate, rope.endDate);
-    out[`row_${rowNum}_employer`] = rope.employer ?? "";
-    out[`row_${rowNum}_work_details`] = rope.workDetails ?? "";
-    out[`row_${rowNum}_rope_access_details`] = rope.skills;
-    out[`row_${rowNum}_hours_worked`] = String(rope.hours);
+    pageRope.forEach((rope, i) => {
+      const rowNum = i + 1;
+      out[`row_${rowNum}_date`] = formatDateRange(rope.startDate, rope.endDate);
+      out[`row_${rowNum}_employer`] = rope.employer ?? "";
+      out[`row_${rowNum}_work_details`] = rope.workDetails ?? "";
+      out[`row_${rowNum}_rope_access_details`] = rope.skills;
+      out[`row_${rowNum}_hours_worked`] = String(rope.hours);
 
-    const sup = findSupervisor(supervisors, rope.verifiedBy);
-    out[`row_${rowNum}_signature_logid`] =
-      sup && sup.spratNumber
-        ? `${rope.verifiedBy} #${sup.spratNumber}`
-        : rope.verifiedBy ?? "";
+      const sup = findSupervisor(supervisors, rope.verifiedBy);
+      out[`row_${rowNum}_signature_logid`] =
+        sup && sup.spratNumber
+          ? `${rope.verifiedBy} #${sup.spratNumber}`
+          : rope.verifiedBy ?? "";
 
-    pageTotal += rope.hours;
+      pageTotal += rope.hours;
+    });
+
+    if (pageTotal > 0) out.hours_this_page = String(pageTotal);
+
+    // Header overrides shallow-merged at the end.
+    Object.assign(out, headerOverrides ?? {});
+    return out;
   });
-
-  if (pageTotal > 0) out.hours_this_page = String(pageTotal);
-
-  // Header overrides shallow-merged at the end.
-  Object.assign(out, headerOverrides ?? {});
-
-  return out;
 };

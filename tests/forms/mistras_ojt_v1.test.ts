@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import type { Entry, User } from "@shared/schema";
 import { mistrasAdapter } from "../../server/forms/adapters/mistras_ojt_v1";
-import { FormCapacityError, EmptyExportError, NothingToExportError } from "../../server/forms/types";
+import { EmptyExportError, NothingToExportError } from "../../server/forms/types";
 import path from "path";
 import { PDFDocument } from "pdf-lib";
-import { fillForm } from "../../server/forms/filler";
+import { fillForm, fillFormPages } from "../../server/forms/filler";
 
 function makeProfile(overrides: Partial<User> = {}): User {
   return {
@@ -40,7 +40,7 @@ function makeEntry(overrides: Partial<Entry>): Entry {
 
 describe("mistrasAdapter — core mapping", () => {
   it("fills header from profile", () => {
-    const out = mistrasAdapter({
+    const [out] = mistrasAdapter({
       entries: [makeEntry({})],
       profile: makeProfile(),
     });
@@ -51,7 +51,7 @@ describe("mistrasAdapter — core mapping", () => {
   });
 
   it("writes a row for each entry with date M/d/yyyy and method cell", () => {
-    const out = mistrasAdapter({
+    const [out] = mistrasAdapter({
       entries: [
         makeEntry({ id: 1, date: new Date("2026-05-04T00:00:00Z"), method: "MT", hours: 4, location: "Plant A" }),
         makeEntry({ id: 2, date: new Date("2026-05-05T00:00:00Z"), method: "PT", hours: 2, location: "Plant B" }),
@@ -66,7 +66,7 @@ describe("mistrasAdapter — core mapping", () => {
   });
 
   it("aliases UT_THK to UT_thk column", () => {
-    const out = mistrasAdapter({
+    const [out] = mistrasAdapter({
       entries: [makeEntry({ method: "UT_THK", hours: 3 })],
       profile: makeProfile(),
     });
@@ -75,7 +75,7 @@ describe("mistrasAdapter — core mapping", () => {
   });
 
   it("populates row supervisor from verifiedBy", () => {
-    const out = mistrasAdapter({
+    const [out] = mistrasAdapter({
       entries: [makeEntry({ verifiedBy: "Supervisor Sam" })],
       profile: makeProfile(),
     });
@@ -83,7 +83,7 @@ describe("mistrasAdapter — core mapping", () => {
   });
 
   it("applies headerOverrides on top of profile defaults", () => {
-    const out = mistrasAdapter({
+    const [out] = mistrasAdapter({
       entries: [makeEntry({})],
       profile: makeProfile(),
       headerOverrides: { employee_signature: "J. Tech (signed)" },
@@ -99,16 +99,17 @@ describe("mistrasAdapter — bounds and unmapped methods", () => {
       .toThrow(EmptyExportError);
   });
 
-  it("throws FormCapacityError on more than 16 entries", () => {
-    const entries = Array.from({ length: 17 }, (_, i) =>
-      makeEntry({ id: i + 1, date: new Date(`2026-05-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`) }));
-    expect(() => mistrasAdapter({ entries, profile: makeProfile() }))
-      .toThrowError(expect.objectContaining({
-        name: "FormCapacityError",
-        max: 16,
-        got: 17,
-        unit: "rows",
-      }));
+  it("paginates more than 16 entries across multiple pages (16 + remainder)", () => {
+    const entries = Array.from({ length: 40 }, (_, i) =>
+      makeEntry({ id: i + 1, method: "MT", date: new Date(`2026-05-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`) }));
+    const pages = mistrasAdapter({ entries, profile: makeProfile() });
+    expect(pages).toHaveLength(3); // 16 + 16 + 8
+    // Each page restarts row numbering at 1 and repeats the header.
+    expect(pages[0].row_16_date).toBeDefined();
+    expect(pages[0].row_1_date).toBeDefined();
+    expect(pages[2].row_8_date).toBeDefined();
+    expect(pages[2].row_9_date).toBeUndefined();
+    expect(pages[2].employee_name).toBe("Jane Tech");
   });
 
   it("throws NothingToExportError when every entry is unmapped", () => {
@@ -123,7 +124,7 @@ describe("mistrasAdapter — bounds and unmapped methods", () => {
   });
 
   it("keeps the row (date+location+supervisor) when method is unmapped", () => {
-    const out = mistrasAdapter({
+    const [out] = mistrasAdapter({
       entries: [
         makeEntry({ id: 1, method: "MT", hours: 2 }),
         makeEntry({ id: 2, method: "PMI", hours: 3, location: "Plant Z" }),
@@ -137,7 +138,7 @@ describe("mistrasAdapter — bounds and unmapped methods", () => {
   });
 
   it("sums hours by column across rows for totals", () => {
-    const out = mistrasAdapter({
+    const [out] = mistrasAdapter({
       entries: [
         makeEntry({ id: 1, method: "MT", hours: 2 }),
         makeEntry({ id: 2, method: "MT", hours: 3 }),
@@ -164,7 +165,7 @@ describe("mistrasAdapter — round-trip through filler", () => {
       makeEntry({ id: 4, date: new Date("2026-05-07T00:00:00Z"), method: "PAUT",    hours: 3,   location: "Site D" }),
     ];
 
-    const expected = mistrasAdapter({ entries, profile });
+    const [expected] = mistrasAdapter({ entries, profile });
     const bytes = await fillForm(MISTRAS_BLANK, expected);
 
     const reopened = await PDFDocument.load(bytes);
@@ -175,5 +176,30 @@ describe("mistrasAdapter — round-trip through filler", () => {
       const actual = form.getTextField(name).getText() ?? "";
       expect(actual, `field ${name}`).toBe(value);
     }
+  });
+
+  it("renders a 40-row export as 3 editable pages with per-page values intact", async () => {
+    const profile = makeProfile({ name: "Multi Page", employeeNumber: "MP-1" });
+    const entries = Array.from({ length: 40 }, (_, i) =>
+      makeEntry({
+        id: i + 1, method: "MT", hours: 1,
+        location: `Site ${i + 1}`,
+        // Strictly increasing dates so sort order matches insertion order.
+        date: new Date(Date.UTC(2026, 0, 1 + i)),
+      }));
+
+    const pages = mistrasAdapter({ entries, profile });
+    expect(pages).toHaveLength(3);
+
+    const bytes = await fillFormPages(MISTRAS_BLANK, pages);
+    const reopened = await PDFDocument.load(bytes);
+    expect(reopened.getPageCount()).toBe(3);
+
+    const form = reopened.getForm();
+    // Fields are renamed per page (<name>__pg<N>) and stay editable.
+    expect(form.getTextField("row_1_location__pg0").getText()).toBe("Site 1");
+    expect(form.getTextField("row_16_location__pg1").getText()).toBe("Site 32");
+    expect(form.getTextField("row_8_location__pg2").getText()).toBe("Site 40");
+    expect(form.getTextField("employee_name__pg2").getText()).toBe("Multi Page");
   });
 });

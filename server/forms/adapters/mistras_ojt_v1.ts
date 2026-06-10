@@ -1,6 +1,5 @@
-import { format } from "date-fns";
 import type { Adapter, FieldValues } from "../types";
-import { EmptyExportError, FormCapacityError, NothingToExportError } from "../types";
+import { chunk, EmptyExportError, NothingToExportError } from "../types";
 
 // Per-form method map. Identity for everything that has the same name on the
 // MISTRAS form; UT_THK is renamed to UT_thk. Methods absent here have no
@@ -25,44 +24,48 @@ const MAX_ROWS = 16;
 
 export const mistrasAdapter: Adapter = ({ entries, profile, headerOverrides }) => {
   if (entries.length === 0) throw new EmptyExportError();
-  if (entries.length > MAX_ROWS) {
-    throw new FormCapacityError(MAX_ROWS, entries.length, "rows");
-  }
 
-  const out: FieldValues = {};
   const sorted = [...entries].sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  const totals: Record<string, number> = {};
-  let anyMethodCellWritten = false;
-
-  sorted.forEach((entry, i) => {
-    const rowNum = i + 1;
-    out[`row_${rowNum}_date`] = formatUtcDate(entry.date);
-    out[`row_${rowNum}_location`] = entry.location;
-    out[`row_${rowNum}_supervisor`] = entry.verifiedBy ?? "";
-
-    const mappedCol = METHOD_MAP[entry.method];
-    if (mappedCol) {
-      out[`row_${rowNum}_${mappedCol}`] = String(entry.hours);
-      totals[mappedCol] = (totals[mappedCol] ?? 0) + entry.hours;
-      anyMethodCellWritten = true;
-    }
-  });
-
-  if (!anyMethodCellWritten) throw new NothingToExportError();
-
-  for (const [col, sum] of Object.entries(totals)) {
-    if (sum > 0) out[`total_${col}`] = String(sum);
-  }
-
   const today = formatUtcDate(new Date());
-  const headerDefaults: FieldValues = {
+  const header: FieldValues = {
     employee_name: profile.name ?? "",
     employee_number: profile.employeeNumber ?? "",
     employee_signature: profile.name ?? "",
     signature_date: today,
   };
-  Object.assign(out, headerDefaults, headerOverrides ?? {});
+  Object.assign(header, headerOverrides ?? {});
 
-  return out;
+  // One page per chunk of MAX_ROWS entries; no overall row cap. Totals are
+  // per-page (each page sums its own rows), and the header repeats on each page.
+  let anyMethodCellWritten = false;
+  const pages: FieldValues[] = chunk(sorted, MAX_ROWS).map((pageEntries) => {
+    const out: FieldValues = {};
+    const totals: Record<string, number> = {};
+
+    pageEntries.forEach((entry, i) => {
+      const rowNum = i + 1;
+      out[`row_${rowNum}_date`] = formatUtcDate(entry.date);
+      out[`row_${rowNum}_location`] = entry.location;
+      out[`row_${rowNum}_supervisor`] = entry.verifiedBy ?? "";
+
+      const mappedCol = METHOD_MAP[entry.method];
+      if (mappedCol) {
+        out[`row_${rowNum}_${mappedCol}`] = String(entry.hours);
+        totals[mappedCol] = (totals[mappedCol] ?? 0) + entry.hours;
+        anyMethodCellWritten = true;
+      }
+    });
+
+    for (const [col, sum] of Object.entries(totals)) {
+      if (sum > 0) out[`total_${col}`] = String(sum);
+    }
+
+    Object.assign(out, header);
+    return out;
+  });
+
+  if (!anyMethodCellWritten) throw new NothingToExportError();
+
+  return pages;
 };

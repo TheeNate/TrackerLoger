@@ -3,8 +3,8 @@ import path from "path";
 import { PDFDocument } from "pdf-lib";
 import type { RopeHours, Supervisor, User } from "@shared/schema";
 import { spratAdapter } from "../../server/forms/adapters/sprat_log_v1";
-import { EmptyExportError, FormCapacityError } from "../../server/forms/types";
-import { fillForm } from "../../server/forms/filler";
+import { EmptyExportError } from "../../server/forms/types";
+import { fillForm, fillFormPages } from "../../server/forms/filler";
 
 function makeProfile(overrides: Partial<User> = {}): User {
   return {
@@ -52,7 +52,7 @@ const SPRAT_BLANK = path.resolve(
 
 describe("spratAdapter — core mapping", () => {
   it("writes row fields including the three new schema fields", () => {
-    const out = spratAdapter({
+    const [out] = spratAdapter({
       ropeHours: [makeRope({
         employer: "Acme Inc",
         workDetails: "Tank inspection",
@@ -69,7 +69,7 @@ describe("spratAdapter — core mapping", () => {
   });
 
   it("formats single-day date as M/D/YYYY", () => {
-    const out = spratAdapter({
+    const [out] = spratAdapter({
       ropeHours: [makeRope({
         startDate: new Date("2026-05-04T00:00:00Z"),
         endDate: new Date("2026-05-04T00:00:00Z"),
@@ -81,7 +81,7 @@ describe("spratAdapter — core mapping", () => {
   });
 
   it("formats multi-day date as M/D/YYYY - M/D/YYYY", () => {
-    const out = spratAdapter({
+    const [out] = spratAdapter({
       ropeHours: [makeRope({
         startDate: new Date("2026-05-04T00:00:00Z"),
         endDate: new Date("2026-05-06T00:00:00Z"),
@@ -93,7 +93,7 @@ describe("spratAdapter — core mapping", () => {
   });
 
   it("appends SPRAT number when supervisor lookup succeeds", () => {
-    const out = spratAdapter({
+    const [out] = spratAdapter({
       ropeHours: [makeRope({ verifiedBy: "Supervisor Sam" })],
       profile: makeProfile(),
       supervisors: [makeSupervisor({ name: "Supervisor Sam", spratNumber: "SP-12345" })],
@@ -102,7 +102,7 @@ describe("spratAdapter — core mapping", () => {
   });
 
   it("uses verifiedBy alone when no supervisor matches", () => {
-    const out = spratAdapter({
+    const [out] = spratAdapter({
       ropeHours: [makeRope({ verifiedBy: "Unknown Sup" })],
       profile: makeProfile(),
       supervisors: [],
@@ -111,7 +111,7 @@ describe("spratAdapter — core mapping", () => {
   });
 
   it("uses verifiedBy alone when supervisor lacks a SPRAT number", () => {
-    const out = spratAdapter({
+    const [out] = spratAdapter({
       ropeHours: [makeRope({ verifiedBy: "Supervisor Sam" })],
       profile: makeProfile(),
       supervisors: [makeSupervisor({ name: "Supervisor Sam", spratNumber: null })],
@@ -120,7 +120,7 @@ describe("spratAdapter — core mapping", () => {
   });
 
   it("computes hours_this_page as sum of selected rope hours", () => {
-    const out = spratAdapter({
+    const [out] = spratAdapter({
       ropeHours: [
         makeRope({ id: 1, hours: 4 }),
         makeRope({ id: 2, hours: 6, startDate: new Date("2026-05-05T00:00:00Z"), endDate: new Date("2026-05-05T00:00:00Z") }),
@@ -133,7 +133,7 @@ describe("spratAdapter — core mapping", () => {
   });
 
   it("accepts headerOverrides for running_total and total_hours_since_cert", () => {
-    const out = spratAdapter({
+    const [out] = spratAdapter({
       ropeHours: [makeRope({})],
       profile: makeProfile(),
       supervisors: [],
@@ -150,11 +150,14 @@ describe("spratAdapter — bounds", () => {
       .toThrow(EmptyExportError);
   });
 
-  it("throws FormCapacityError on more than 6 rope hours", () => {
+  it("paginates more than 6 rope hours across pages (6 + remainder)", () => {
     const ropeHours = Array.from({ length: 7 }, (_, i) =>
-      makeRope({ id: i + 1, startDate: new Date(`2026-05-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`), endDate: new Date(`2026-05-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`) }));
-    expect(() => spratAdapter({ ropeHours, profile: makeProfile(), supervisors: [] }))
-      .toThrowError(expect.objectContaining({ name: "FormCapacityError", max: 6, got: 7, unit: "rows" }));
+      makeRope({ id: i + 1, startDate: new Date(Date.UTC(2026, 0, 1 + i)), endDate: new Date(Date.UTC(2026, 0, 1 + i)) }));
+    const pages = spratAdapter({ ropeHours, profile: makeProfile(), supervisors: [] });
+    expect(pages).toHaveLength(2); // 6 + 1
+    expect(pages[0].row_6_date).toBeDefined();
+    expect(pages[1].row_1_date).toBeDefined();
+    expect(pages[1].row_2_date).toBeUndefined();
   });
 });
 
@@ -167,7 +170,7 @@ describe("spratAdapter — round-trip through filler", () => {
     ];
     const supervisors = [makeSupervisor({ name: "Sam", spratNumber: "SP-9999" })];
 
-    const expected = spratAdapter({
+    const [expected] = spratAdapter({
       ropeHours,
       profile: makeProfile(),
       supervisors,
@@ -181,5 +184,23 @@ describe("spratAdapter — round-trip through filler", () => {
       const got = form.getTextField(name).getText() ?? "";
       expect(got, `field ${name}`).toBe(value);
     }
+  });
+
+  it("renders 14 rope hours as 3 editable pages (6 + 6 + 2)", async () => {
+    const ropeHours: RopeHours[] = Array.from({ length: 14 }, (_, i) =>
+      makeRope({ id: i + 1, hours: 1, employer: `Emp ${i + 1}`,
+        startDate: new Date(Date.UTC(2026, 0, 1 + i)), endDate: new Date(Date.UTC(2026, 0, 1 + i)) }));
+
+    const pages = spratAdapter({ ropeHours, profile: makeProfile(), supervisors: [] });
+    expect(pages).toHaveLength(3);
+
+    const bytes = await fillFormPages(SPRAT_BLANK, pages);
+    const reopened = await PDFDocument.load(bytes);
+    expect(reopened.getPageCount()).toBe(3);
+
+    const form = reopened.getForm();
+    expect(form.getTextField("row_1_employer__pg0").getText()).toBe("Emp 1");
+    expect(form.getTextField("row_6_employer__pg1").getText()).toBe("Emp 12");
+    expect(form.getTextField("row_2_employer__pg2").getText()).toBe("Emp 14");
   });
 });

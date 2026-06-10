@@ -35,7 +35,7 @@ import {
 } from "../email";
 import { hash } from "bcrypt";
 import { ObjectStorageService } from "../replit_integrations/object_storage/objectStorage";
-import { fillForm } from "../forms/filler";
+import { fillFormPages } from "../forms/filler";
 import { isFormId, registry } from "../forms/registry";
 import {
   EmptyExportError,
@@ -607,14 +607,14 @@ function buildServer(userId: number): McpServer {
       if (!profile) return err("user not found");
       const requested = new Set(entryIds);
 
-      let fieldValues: Record<string, string>;
+      let pages: Record<string, string>[];
       let earliestMs: number, latestMs: number;
       try {
         if (entryDef.kind === "ojt") {
           const all = await storage.getEntries(userId);
           const selected = all.filter((e) => requested.has(e.id));
           if (selected.length !== requested.size) return err("one or more entryIds not found or not yours");
-          fieldValues = entryDef.adapter({ entries: selected, profile, headerOverrides });
+          pages = entryDef.adapter({ entries: selected, profile, headerOverrides });
           const dates = selected.map((e) => e.date.getTime()).sort();
           earliestMs = dates[0];
           latestMs = dates[dates.length - 1];
@@ -623,7 +623,7 @@ function buildServer(userId: number): McpServer {
           const selected = all.filter((r) => requested.has(r.id));
           if (selected.length !== requested.size) return err("one or more entryIds not found or not yours");
           const sups = await storage.getSupervisors(userId);
-          fieldValues = entryDef.adapter({ ropeHours: selected, profile, supervisors: sups, headerOverrides });
+          pages = entryDef.adapter({ ropeHours: selected, profile, supervisors: sups, headerOverrides });
           const dates = selected.map((r) => r.startDate.getTime()).sort();
           earliestMs = dates[0];
           latestMs = dates[dates.length - 1];
@@ -637,7 +637,7 @@ function buildServer(userId: number): McpServer {
 
       let bytes: Uint8Array;
       try {
-        bytes = await fillForm(entryDef.blankPath, fieldValues);
+        bytes = await fillFormPages(entryDef.blankPath, pages);
       } catch (e) {
         return err(`form fill failed: ${e instanceof Error ? e.message : "unknown"}`);
       }

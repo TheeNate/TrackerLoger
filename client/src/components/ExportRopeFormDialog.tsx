@@ -17,7 +17,9 @@ const FORM_LABELS: Record<FormId, string> = {
   irata_log_v1: "IRATA — Work Experience",
 };
 
-const ROW_LIMITS: Record<FormId, number> = {
+// Rows that fit on one page of each form. Exports longer than this paginate
+// onto additional pages automatically — there is no hard cap.
+const ROWS_PER_PAGE: Record<FormId, number> = {
   sprat_log_v1: 6,
   irata_log_v1: 7,
 };
@@ -38,7 +40,7 @@ export function ExportRopeFormDialog({
   const [runningTotalHours, setRunningTotalHours] = useState("");
   const [downloading, setDownloading] = useState(false);
 
-  const overCapacity = selectedRopeHours.length > ROW_LIMITS[formId];
+  const pageCount = Math.ceil(selectedRopeHours.length / ROWS_PER_PAGE[formId]);
 
   async function handleDownload() {
     setDownloading(true);
@@ -116,10 +118,10 @@ export function ExportRopeFormDialog({
             </RadioGroup>
           </div>
 
-          {overCapacity && (
-            <p className="text-sm text-amber-700 bg-amber-50 p-2 rounded">
-              {selectedRopeHours.length} rows selected, but this form fits {ROW_LIMITS[formId]}.
-              You&apos;ll get a capacity error — deselect some entries before downloading.
+          {pageCount > 1 && (
+            <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
+              {selectedRopeHours.length} rows will be split across {pageCount} pages
+              ({ROWS_PER_PAGE[formId]} per page).
             </p>
           )}
 
