@@ -13,9 +13,11 @@ import { ApiTokensCard } from "@/components/ApiTokensCard";
 import { CertificationsCard } from "@/components/CertificationsCard";
 import { ShareProfileCard } from "@/components/ShareProfileCard";
 import { Button } from "@/components/ui/button";
-import { Upload } from "lucide-react";
+import { Upload, ClipboardList } from "lucide-react";
 import { Entry, User } from "@shared/schema";
 import { useOnlineStatus } from "@/lib/offline/online";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { MobileLogDrawer } from "@/components/MobileLogDrawer";
 
 export default function ProfilePage() {
   const { toast } = useToast();
@@ -27,6 +29,7 @@ export default function ProfilePage() {
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const online = useOnlineStatus();
+  const isMobile = useIsMobile();
   const handleOpenImport = () => {
     if (!online) {
       toast({
@@ -111,7 +114,20 @@ export default function ProfilePage() {
           </Button>
         </div>
 
-        <NewEntryForm />
+        {isMobile ? (
+          <div className="mb-8">
+            <MobileLogDrawer
+              buttonLabel="Log OJT"
+              title="Log OJT Hours"
+              description="Record a training session — date, location, method and hours."
+              icon={<ClipboardList className="h-5 w-5" />}
+            >
+              {(close) => <NewEntryForm mobile onDone={close} />}
+            </MobileLogDrawer>
+          </div>
+        ) : (
+          <NewEntryForm />
+        )}
 
         <OJTTable
           entries={entries}

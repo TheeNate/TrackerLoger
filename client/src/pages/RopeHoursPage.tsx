@@ -20,6 +20,8 @@ import { ImportLogDialog } from "@/components/ImportLogDialog";
 import { ImportedLogGroups } from "@/components/ImportedLogGroups";
 import { SourceDocumentLink } from "@/components/SourceDocumentLink";
 import { useOnlineStatus } from "@/lib/offline/online";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { MobileLogDrawer } from "@/components/MobileLogDrawer";
 import {
   isPendingSync,
   getSyncFailure,
@@ -67,6 +69,7 @@ export default function RopeHoursPage() {
   };
   const { toast } = useToast();
   const online = useOnlineStatus();
+  const isMobile = useIsMobile();
   const [, navigate] = useLocation();
 
   const createMutation = useMutation<
@@ -105,7 +108,7 @@ export default function RopeHoursPage() {
     enabled: !!user
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent, onDone?: () => void) => {
     e.preventDefault();
 
     if (!startDate || !endDate || !location || !skills || !hours) {
@@ -157,6 +160,7 @@ export default function RopeHoursPage() {
         ? "Your rope hours have been saved."
         : "We'll sync this entry when you reconnect.",
     });
+    onDone?.();
   };
 
   const handleDeleteRopeHour = (ropeHourId: number) => {
@@ -262,6 +266,148 @@ export default function RopeHoursPage() {
     }, 0);
   };
 
+  const renderRopeForm = (onDone?: () => void) => (
+    <form onSubmit={(e) => handleSubmit(e, onDone)} className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="startDate">Start Date</Label>
+          <Input
+            id="startDate"
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="endDate">End Date</Label>
+          <Input
+            id="endDate"
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            required
+          />
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="location">Location</Label>
+        <Input
+          id="location"
+          placeholder="Enter work location"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          required
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="skills">Skills Used</Label>
+        <Textarea
+          id="skills"
+          placeholder="Describe the skills and techniques used during this rope hours session"
+          value={skills}
+          onChange={(e) => setSkills(e.target.value)}
+          required
+        />
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {[
+            "Aid Climbing",
+            "Anchorage Systems",
+            "Ascent",
+            "Descent",
+            "Deviation",
+            "Dual Main Systems",
+            "Hauling",
+            "Lowering",
+            "Re-anchor",
+            "Retrievable Rope Systems",
+            "Rope to Rope Transfer",
+            "Tension Rope Systems",
+          ].map((skill) => {
+            const tokens = skills
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
+            const alreadyAdded = tokens.some(
+              (t) => t.toLowerCase() === skill.toLowerCase(),
+            );
+            return (
+              <Button
+                key={skill}
+                type="button"
+                size="sm"
+                variant={alreadyAdded ? "secondary" : "outline"}
+                disabled={alreadyAdded}
+                className="h-7 text-xs"
+                onClick={() => {
+                  setSkills((prev) => {
+                    const trimmed = prev.trim();
+                    if (!trimmed) return skill;
+                    return trimmed.endsWith(",")
+                      ? `${trimmed} ${skill}`
+                      : `${trimmed}, ${skill}`;
+                  });
+                }}
+              >
+                {skill}
+              </Button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="hours">Hours</Label>
+        <Input
+          id="hours"
+          type="number"
+          step="0.1"
+          min="0"
+          placeholder="Enter hours worked"
+          value={hours}
+          onChange={(e) => setHours(e.target.value)}
+          required
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="employer">Employer (optional)</Label>
+        <Input
+          id="employer"
+          value={employer}
+          onChange={(e) => setEmployer(e.target.value)}
+          placeholder="e.g. Acme Inc"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="workDetails">Work details (optional)</Label>
+        <Textarea
+          id="workDetails"
+          value={workDetails}
+          onChange={(e) => setWorkDetails(e.target.value)}
+          placeholder="What the work was — used for SPRAT and IRATA exports"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="maxHeight">Max height (optional, IRATA exports)</Label>
+        <Input
+          id="maxHeight"
+          value={maxHeight}
+          onChange={(e) => setMaxHeight(e.target.value)}
+          placeholder="e.g. 12m / 40ft"
+        />
+      </div>
+
+      <Button type="submit" className={onDone ? "w-full h-12 text-base" : ""}>
+        {online ? "Log Rope Hours" : "Log Offline"}
+      </Button>
+    </form>
+  );
+
   if (isLoadingUser) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -330,156 +476,28 @@ export default function RopeHoursPage() {
       </Card>
 
       {/* Log New Rope Hours Form */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Log New Rope Hours</CardTitle>
-          <CardDescription>
-            Record your rope access training hours with date range and skills used
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="startDate">Start Date</Label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="endDate">End Date</Label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-            
-            <div>
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                placeholder="Enter work location"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                required
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="skills">Skills Used</Label>
-              <Textarea
-                id="skills"
-                placeholder="Describe the skills and techniques used during this rope hours session"
-                value={skills}
-                onChange={(e) => setSkills(e.target.value)}
-                required
-              />
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {[
-                  "Aid Climbing",
-                  "Anchorage Systems",
-                  "Ascent",
-                  "Descent",
-                  "Deviation",
-                  "Dual Main Systems",
-                  "Hauling",
-                  "Lowering",
-                  "Re-anchor",
-                  "Retrievable Rope Systems",
-                  "Rope to Rope Transfer",
-                  "Tension Rope Systems",
-                ].map((skill) => {
-                  const tokens = skills
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean);
-                  const alreadyAdded = tokens.some(
-                    (t) => t.toLowerCase() === skill.toLowerCase(),
-                  );
-                  return (
-                    <Button
-                      key={skill}
-                      type="button"
-                      size="sm"
-                      variant={alreadyAdded ? "secondary" : "outline"}
-                      disabled={alreadyAdded}
-                      className="h-7 text-xs"
-                      onClick={() => {
-                        setSkills((prev) => {
-                          const trimmed = prev.trim();
-                          if (!trimmed) return skill;
-                          return trimmed.endsWith(",")
-                            ? `${trimmed} ${skill}`
-                            : `${trimmed}, ${skill}`;
-                        });
-                      }}
-                    >
-                      {skill}
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-            
-            <div>
-              <Label htmlFor="hours">Hours</Label>
-              <Input
-                id="hours"
-                type="number"
-                step="0.1"
-                min="0"
-                placeholder="Enter hours worked"
-                value={hours}
-                onChange={(e) => setHours(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="employer">Employer (optional)</Label>
-              <Input
-                id="employer"
-                value={employer}
-                onChange={(e) => setEmployer(e.target.value)}
-                placeholder="e.g. Acme Inc"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="workDetails">Work details (optional)</Label>
-              <Textarea
-                id="workDetails"
-                value={workDetails}
-                onChange={(e) => setWorkDetails(e.target.value)}
-                placeholder="What the work was — used for SPRAT and IRATA exports"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="maxHeight">Max height (optional, IRATA exports)</Label>
-              <Input
-                id="maxHeight"
-                value={maxHeight}
-                onChange={(e) => setMaxHeight(e.target.value)}
-                placeholder="e.g. 12m / 40ft"
-              />
-            </div>
-
-            <Button type="submit">
-              {online ? "Log Rope Hours" : "Log Offline"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
+      {isMobile ? (
+        <div className="my-6">
+          <MobileLogDrawer
+            buttonLabel="Log Rope Hours"
+            title="Log New Rope Hours"
+            description="Record your rope access training hours with date range and skills used"
+            icon={<Cable className="h-5 w-5" />}
+          >
+            {(close) => renderRopeForm(close)}
+          </MobileLogDrawer>
+        </div>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Log New Rope Hours</CardTitle>
+            <CardDescription>
+              Record your rope access training hours with date range and skills used
+            </CardDescription>
+          </CardHeader>
+          <CardContent>{renderRopeForm()}</CardContent>
+        </Card>
+      )}
       {historyOpen && (
         <ImportedLogGroups
           records={ropeHours as RopeHours[]}

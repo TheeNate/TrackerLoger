@@ -45,7 +45,10 @@ const emptyRow = () => ({
   hours: 0,
 });
 
-export function NewEntryForm() {
+export function NewEntryForm({
+  mobile = false,
+  onDone,
+}: { mobile?: boolean; onDone?: () => void } = {}) {
   const { toast } = useToast();
   const online = useOnlineStatus();
 
@@ -90,12 +93,102 @@ export function NewEntryForm() {
         ? "Your OJT hours have been saved."
         : "We'll sync these entries when you reconnect.",
     });
+    onDone?.();
   };
 
   const methodOptions = Object.keys(NDTMethods).map((key) => ({
     value: key,
     label: key === "UT_THK" ? "UT Thk." : key,
   }));
+
+  if (mobile) {
+    return (
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(handleSubmit)}
+          className="space-y-5"
+        >
+          <FormField
+            control={form.control}
+            name="entries.0.date"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-base">Job Date</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} className="w-full" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="entries.0.location"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-base">Job Location</FormLabel>
+                <FormControl>
+                  <Input placeholder="Enter location" {...field} className="w-full" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="entries.0.method"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-base">NDT Method</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select method" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {methodOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="entries.0.hours"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-base">Hours</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.5"
+                    placeholder="0.0"
+                    {...field}
+                    onChange={(e) =>
+                      field.onChange(parseFloat(e.target.value) || 0)
+                    }
+                    className="w-full"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <Button type="submit" className="w-full h-12 text-base">
+            {online ? "Save Entry" : "Save Offline"}
+          </Button>
+        </form>
+      </Form>
+    );
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
