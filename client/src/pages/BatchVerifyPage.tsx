@@ -15,6 +15,7 @@ export default function BatchVerifyPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isVerifying, setIsVerifying] = useState(false);
+  const [attested, setAttested] = useState(false);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: [`/api/batch-verify/${token}`],
@@ -33,7 +34,7 @@ export default function BatchVerifyPage() {
       const response = await fetch(`/api/batch-verify/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ supervisorName: values.verifierName }),
+        body: JSON.stringify({ supervisorName: values.verifierName, attestation: attested }),
         credentials: "include",
       });
 
@@ -144,10 +145,23 @@ export default function BatchVerifyPage() {
               )}
             />
 
+            <label className="flex items-start gap-2 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-neutral-300"
+                checked={attested}
+                onChange={(e) => setAttested(e.target.checked)}
+              />
+              <span>
+                I confirm that I directly supervised these hours and that the
+                details above are accurate to the best of my knowledge.
+              </span>
+            </label>
+
             <Button
               type="submit"
               className="w-full"
-              disabled={isVerifying}
+              disabled={isVerifying || !attested}
               variant="secondary"
             >
               {isVerifying ? "Verifying..." : `Verify All ${entries.length} Entries`}

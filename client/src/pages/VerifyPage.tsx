@@ -14,6 +14,7 @@ export default function VerifyPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isVerifying, setIsVerifying] = useState(false);
+  const [attested, setAttested] = useState(false);
   
   // Log token for debugging
   console.log("Verification token:", token);
@@ -46,7 +47,7 @@ export default function VerifyPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ supervisorName }),
+        body: JSON.stringify({ supervisorName, attestation: attested }),
         credentials: "include"
       });
       
@@ -196,10 +197,23 @@ export default function VerifyPage() {
               )}
             />
             
-            <Button 
-              type="submit" 
+            <label className="flex items-start gap-2 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-neutral-300"
+                checked={attested}
+                onChange={(e) => setAttested(e.target.checked)}
+              />
+              <span>
+                I confirm that I directly supervised these hours and that the
+                details above are accurate to the best of my knowledge.
+              </span>
+            </label>
+
+            <Button
+              type="submit"
               className="w-full"
-              disabled={isVerifying}
+              disabled={isVerifying || !attested}
               variant="secondary"
             >
               {isVerifying ? "Verifying..." : "Verify Hours"}

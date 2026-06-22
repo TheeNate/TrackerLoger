@@ -7,12 +7,42 @@ import {
   type RopeHours, type InsertRopeHours,
   type UserCryptoIdentity, type InsertUserCryptoIdentity,
   type ApiToken, type InsertApiToken,
-  type Certification, type InsertCertification
+  type Certification, type InsertCertification,
+  type VerificationAuditEvent, type VerificationAuditTrail
 } from "@shared/schema";
 
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
+
+// Evidence captured at the moment a supervisor confirms hours. All optional so
+// the verify flow degrades gracefully when, e.g., an IP can't be determined.
+export type VerificationEvidence = {
+  ipAddress?: string;
+  browserInfo?: string;
+  attestation?: boolean;
+  email?: string;
+};
+
+// Append a "verified" event onto an existing audit trail (created at request
+// time). Returns the new trail; never mutates the input.
+function appendVerifiedEvent(
+  existing: VerificationAuditTrail | null | undefined,
+  verifiedBy: string,
+  at: Date,
+  evidence?: VerificationEvidence,
+): VerificationAuditTrail {
+  const event: VerificationAuditEvent = {
+    action: "verified",
+    timestamp: at.toISOString(),
+    actor: verifiedBy,
+    email: evidence?.email,
+    ipAddress: evidence?.ipAddress,
+    browserInfo: evidence?.browserInfo,
+    attestation: evidence?.attestation,
+  };
+  return [...(existing ?? []), event];
+}
 
 export interface IStorage {
   // User methods
@@ -38,7 +68,7 @@ export interface IStorage {
     sourceDocumentName: string,
   ): Promise<Entry[]>;
   updateEntry(id: number, updates: Partial<InsertEntry>): Promise<Entry>;
-  verifyEntry(id: number, verifiedBy: string): Promise<Entry>;
+  verifyEntry(id: number, verifiedBy: string, evidence?: VerificationEvidence): Promise<Entry>;
   deleteEntry(id: number): Promise<void>;
   deleteImportedEntriesBySourceDocumentKey(
     userId: number,
@@ -62,7 +92,7 @@ export interface IStorage {
     sourceDocumentName: string,
   ): Promise<RopeHours[]>;
   updateRopeHour(id: number, updates: Partial<InsertRopeHours>): Promise<RopeHours>;
-  verifyRopeHour(id: number, verifiedBy: string): Promise<RopeHours>;
+  verifyRopeHour(id: number, verifiedBy: string, evidence?: VerificationEvidence): Promise<RopeHours>;
   deleteRopeHour(id: number): Promise<void>;
   deleteImportedRopeHoursBySourceDocumentKey(
     userId: number,
@@ -208,13 +238,25 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async verifyEntry(id: number, verifiedBy: string): Promise<Entry> {
+  async verifyEntry(id: number, verifiedBy: string, evidence?: VerificationEvidence): Promise<Entry> {
+    const existing = await this.getEntry(id);
+    const verifiedAt = new Date();
+    const auditTrail = appendVerifiedEvent(
+      existing?.auditTrail,
+      verifiedBy,
+      verifiedAt,
+      evidence,
+    );
     const [entry] = await db
       .update(entries)
-      .set({ 
-        verified: true, 
-        verifiedBy, 
-        verifiedAt: new Date() 
+      .set({
+        verified: true,
+        verifiedBy,
+        verifiedAt,
+        verifiedByEmail: evidence?.email ?? existing?.verifiedByEmail ?? null,
+        supervisorIpAddress: evidence?.ipAddress ?? null,
+        supervisorBrowserInfo: evidence?.browserInfo ?? null,
+        auditTrail,
       })
       .where(eq(entries.id, id))
       .returning();
@@ -331,13 +373,25 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async verifyRopeHour(id: number, verifiedBy: string): Promise<RopeHours> {
+  async verifyRopeHour(id: number, verifiedBy: string, evidence?: VerificationEvidence): Promise<RopeHours> {
+    const existing = await this.getRopeHour(id);
+    const verifiedAt = new Date();
+    const auditTrail = appendVerifiedEvent(
+      existing?.auditTrail,
+      verifiedBy,
+      verifiedAt,
+      evidence,
+    );
     const [ropeHour] = await db
       .update(ropeHours)
-      .set({ 
-        verified: true, 
-        verifiedBy, 
-        verifiedAt: new Date() 
+      .set({
+        verified: true,
+        verifiedBy,
+        verifiedAt,
+        verifiedByEmail: evidence?.email ?? existing?.verifiedByEmail ?? null,
+        supervisorIpAddress: evidence?.ipAddress ?? null,
+        supervisorBrowserInfo: evidence?.browserInfo ?? null,
+        auditTrail,
       })
       .where(eq(ropeHours.id, id))
       .returning();

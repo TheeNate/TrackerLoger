@@ -10,6 +10,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { SourceDocumentLink } from "@/components/SourceDocumentLink";
+import { VerificationProofModal } from "@/components/VerificationProofModal";
+import { useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -105,6 +107,7 @@ export function EntryRow({
   };
   const pendingSync = isPendingSync(e);
   const syncFailed = getSyncFailure(e);
+  const [proofOpen, setProofOpen] = useState(false);
 
   const deleteMutation = useMutation<unknown, Error, number>({
     mutationKey: ["entries.delete"],
@@ -343,21 +346,38 @@ export function EntryRow({
           </div>
         ) : entry.verified ? (
           <div className="flex items-center gap-2 flex-wrap">
-            <svg
-              className="mr-1.5 h-2 w-2 text-green-500"
-              fill="currentColor"
-              viewBox="0 0 8 8"
+            <button
+              type="button"
+              onClick={() => setProofOpen(true)}
+              className="inline-flex items-center text-green-700 hover:text-green-800 hover:underline"
+              title="View verification record"
             >
-              <circle cx="4" cy="4" r="3" />
-            </svg>
-            <span className="text-green-700">
+              <svg
+                className="mr-1.5 h-2 w-2 text-green-500"
+                fill="currentColor"
+                viewBox="0 0 8 8"
+              >
+                <circle cx="4" cy="4" r="3" />
+              </svg>
               Verified by {entry.verifiedBy}
-            </span>
+            </button>
             <DeleteEntryButton
               entry={entry}
               isPending={deleteMutation.isPending}
               onConfirm={handleDelete}
               warnVerified
+            />
+            <VerificationProofModal
+              open={proofOpen}
+              onOpenChange={setProofOpen}
+              title="OJT hours verification"
+              record={entry}
+              summaryRows={[
+                { label: "Date", value: formatDate(entry.date) },
+                { label: "Location", value: entry.location },
+                { label: "Method", value: entry.method },
+                { label: "Hours", value: entry.hours.toFixed(1) },
+              ]}
             />
           </div>
         ) : (

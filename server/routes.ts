@@ -70,6 +70,25 @@ declare module "express-session" {
   }
 }
 
+// Pull the evidence we can observe at verification-confirm time off the request:
+// the supervisor's IP (honoring a proxy's X-Forwarded-For), their user-agent,
+// and whether they ticked the attestation box. Used to build the audit trail.
+function buildVerificationEvidence(
+  req: Request,
+  attestation: unknown,
+): { ipAddress?: string; browserInfo?: string; attestation?: boolean } {
+  const forwarded = req.headers["x-forwarded-for"];
+  const forwardedIp = Array.isArray(forwarded)
+    ? forwarded[0]
+    : typeof forwarded === "string"
+      ? forwarded.split(",")[0].trim()
+      : undefined;
+  const ipAddress =
+    forwardedIp || req.ip || req.socket?.remoteAddress || undefined;
+  const browserInfo = req.get("user-agent") || undefined;
+  return { ipAddress, browserInfo, attestation: attestation === true };
+}
+
 // In server/routes.ts, replace the session configuration with this:
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1109,15 +1128,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate verification token
       const verificationToken = randomUUID();
 
-      // Update rope hour with verification token
-      const [updatedRopeHour] = await db
-        .update(ropeHours)
-        .set({ verificationToken })
-        .where(eq(ropeHours.id, ropeHour.id))
-        .returning();
-
       // Get user data
       const user = await storage.getUser(userId);
+
+      // Update rope hour with verification token and seed the audit trail.
+      const requestedAt = new Date();
+      const [updatedRopeHour] = await db
+        .update(ropeHours)
+        .set({
+          verificationToken,
+          verificationRequestedAt: requestedAt,
+          verifiedByEmail: supervisor.email,
+          auditTrail: [
+            {
+              action: "verification_requested",
+              timestamp: requestedAt.toISOString(),
+              actor: user?.name ?? undefined,
+              email: supervisor.email,
+            },
+          ],
+        })
+        .where(eq(ropeHours.id, ropeHour.id))
+        .returning();
 
       // Create verification URL
       const baseUrl = getBaseUrl();
@@ -1192,15 +1224,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate verification token
       const verificationToken = randomUUID();
 
-      // Update entry with verification token
-      const [updatedEntry] = await db
-        .update(entries)
-        .set({ verificationToken })
-        .where(eq(entries.id, entry.id))
-        .returning();
-
       // Get user data
       const user = await storage.getUser(userId);
+
+      // Update entry with verification token and seed the audit trail with the
+      // request event (records who asked, which address the link went to, when).
+      const requestedAt = new Date();
+      const [updatedEntry] = await db
+        .update(entries)
+        .set({
+          verificationToken,
+          verificationRequestedAt: requestedAt,
+          verifiedByEmail: supervisor.email,
+          auditTrail: [
+            {
+              action: "verification_requested",
+              timestamp: requestedAt.toISOString(),
+              actor: user?.name ?? undefined,
+              email: supervisor.email,
+            },
+          ],
+        })
+        .where(eq(entries.id, entry.id))
+        .returning();
 
       // Create verification URL
       const baseUrl = getBaseUrl();
@@ -1239,6 +1285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/verify/:token", async (req, res) => {
     try {
       const { token } = req.params;
+      const opened = buildVerificationEvidence(req, false);
 
       // Try to get entry by verification token first
       const entry = await storage.getEntryByVerificationToken(token);
@@ -1246,6 +1293,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Check if entry is already verified
         if (entry.verified) {
           return res.status(400).json({ message: "Entry already verified" });
+        }
+
+        // Record that the emailed link was opened (once — skip on refresh).
+        const trail = entry.auditTrail ?? [];
+        if (trail[trail.length - 1]?.action !== "link_opened") {
+          await db
+            .update(entries)
+            .set({
+              auditTrail: [
+                ...trail,
+                {
+                  action: "link_opened",
+                  timestamp: new Date().toISOString(),
+                  ipAddress: opened.ipAddress,
+                  browserInfo: opened.browserInfo,
+                },
+              ],
+            })
+            .where(eq(entries.id, entry.id));
         }
 
         // Get user and supervisors
@@ -1265,6 +1331,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Check if rope hour is already verified
         if (ropeHour.verified) {
           return res.status(400).json({ message: "Rope hour already verified" });
+        }
+
+        // Record that the emailed link was opened (once — skip on refresh).
+        const trail = ropeHour.auditTrail ?? [];
+        if (trail[trail.length - 1]?.action !== "link_opened") {
+          await db
+            .update(ropeHours)
+            .set({
+              auditTrail: [
+                ...trail,
+                {
+                  action: "link_opened",
+                  timestamp: new Date().toISOString(),
+                  ipAddress: opened.ipAddress,
+                  browserInfo: opened.browserInfo,
+                },
+              ],
+            })
+            .where(eq(ropeHours.id, ropeHour.id));
         }
 
         // Get user and supervisors
@@ -1291,11 +1376,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/verify/:token", async (req, res) => {
     try {
       const { token } = req.params;
-      const { supervisorName } = req.body;
+      const { supervisorName, attestation } = req.body;
 
       if (!supervisorName) {
         return res.status(400).json({ message: "Supervisor name is required" });
       }
+
+      const evidence = buildVerificationEvidence(req, attestation);
 
       // Try to get entry by verification token first
       const entry = await storage.getEntryByVerificationToken(token);
@@ -1306,7 +1393,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Verify entry
-        const verifiedEntry = await storage.verifyEntry(entry.id, supervisorName);
+        const verifiedEntry = await storage.verifyEntry(entry.id, supervisorName, {
+          ...evidence,
+          email: entry.verifiedByEmail ?? undefined,
+        });
 
         // Send confirmation email to user
         const user = await storage.getUser(entry.userId);
@@ -1329,7 +1419,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Verify rope hour
-        const verifiedRopeHour = await storage.verifyRopeHour(ropeHour.id, supervisorName);
+        const verifiedRopeHour = await storage.verifyRopeHour(ropeHour.id, supervisorName, {
+          ...evidence,
+          email: ropeHour.verifiedByEmail ?? undefined,
+        });
 
         // Send confirmation email to user
         const user = await storage.getUser(ropeHour.userId);
@@ -1382,14 +1475,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate one shared batch token
       const batchToken = randomUUID();
 
-      // Stamp every entry with the same token
+      const user = await storage.getUser(userId);
+
+      // Stamp every entry with the same token and seed each audit trail.
+      const requestedAt = new Date();
       await Promise.all(
         resolvedEntries.map((entry) =>
-          db.update(entries).set({ verificationToken: batchToken }).where(eq(entries.id, entry.id))
+          db.update(entries).set({
+            verificationToken: batchToken,
+            verificationRequestedAt: requestedAt,
+            verifiedByEmail: supervisor.email,
+            auditTrail: [
+              {
+                action: "verification_requested",
+                timestamp: requestedAt.toISOString(),
+                actor: user?.name ?? undefined,
+                email: supervisor.email,
+              },
+            ],
+          }).where(eq(entries.id, entry.id))
         )
       );
 
-      const user = await storage.getUser(userId);
       const baseUrl = getBaseUrl();
       const verificationUrl = `${baseUrl}/batch-verify/${batchToken}`;
 
@@ -1436,11 +1543,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/batch-verify/:token", async (req, res) => {
     try {
       const { token } = req.params;
-      const { supervisorName } = req.body;
+      const { supervisorName, attestation } = req.body;
 
       if (!supervisorName) {
         return res.status(400).json({ message: "Supervisor name is required" });
       }
+
+      const evidence = buildVerificationEvidence(req, attestation);
 
       const batchEntries = await storage.getEntriesByBatchToken(token);
       if (!batchEntries.length) {
@@ -1453,7 +1562,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const verifiedEntries = await Promise.all(
-        unverified.map((entry) => storage.verifyEntry(entry.id, supervisorName))
+        unverified.map((entry) => storage.verifyEntry(entry.id, supervisorName, {
+          ...evidence,
+          email: entry.verifiedByEmail ?? undefined,
+        }))
       );
 
       // Send one confirmation email to the technician
@@ -2608,18 +2720,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       }
 
-      // Selected certifications (metadata only — no file links).
+      // Selected certifications. We expose the cert id and whether a document
+      // exists so the public page can request a short-lived signed URL for it
+      // via the token-gated document endpoint below (no document key leaks here).
       const allowCerts = new Set(settings.certIds);
       const allCerts = await storage.getCertifications(user.id);
       const certifications = allCerts
         .filter((c) => allowCerts.has(c.id))
         .map((c) => ({
+          id: c.id,
           name: c.name,
           issuingBody: c.issuingBody,
           method: c.method,
           level: c.level,
           issueDate: c.issueDate,
           expiryDate: c.expiryDate,
+          hasDocument: Boolean(c.documentKey),
         }));
 
       res.json({
@@ -2631,6 +2747,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Public profile error:", error);
       res.status(500).json({ message: "Error fetching public profile" });
+    }
+  });
+
+  // Public, no-auth signed URL for a certification document, gated by the share
+  // token. Only certs the owner explicitly added to shareSettings.certIds are
+  // viewable; everything else 404s so we never confirm a cert's existence.
+  app.get("/api/public-profile/:token/certifications/:certId/document", async (req, res) => {
+    try {
+      const token = (req.params.token ?? "").toString();
+      const certId = parseInt(req.params.certId, 10);
+      if (!Number.isFinite(certId)) {
+        return res.status(400).json({ message: "Invalid id" });
+      }
+
+      const user = token ? await storage.getUserByShareToken(token) : undefined;
+      if (!user || !user.shareToken) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+
+      const sharedCertIds = new Set(user.shareSettings?.certIds ?? []);
+      const cert = await storage.getCertification(certId);
+      if (
+        !cert ||
+        cert.userId !== user.id ||
+        !sharedCertIds.has(cert.id) ||
+        !cert.documentKey
+      ) {
+        return res.status(404).json({ message: "Certificate file not found" });
+      }
+
+      const url = await objectStorageService.getSignedDownloadURL(
+        cert.documentKey,
+        600,
+      );
+      return res.json({ url, name: cert.documentName });
+    } catch (error) {
+      console.error("Public certification document error:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.status(404).json({ message: "Certificate file not found" });
+      }
+      return res.status(500).json({ message: "Error fetching certificate file" });
     }
   });
 

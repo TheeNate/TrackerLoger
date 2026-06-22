@@ -97,6 +97,23 @@ export const insertUserSchema = createInsertSchema(users).pick({
   employeeNumber: true,
 });
 
+// One event in a record's verification audit trail (stored as JSON on the
+// record). The trail is an ordered timeline: the request, the supervisor
+// opening the emailed link, and the final confirmation — each stamped with
+// whatever evidence we captured at that moment.
+export type VerificationAuditEvent = {
+  action: "verification_requested" | "link_opened" | "verified";
+  timestamp: string; // ISO 8601
+  actor?: string; // technician or supervisor name, depending on the action
+  email?: string; // address the link was sent to / supervisor's address
+  ipAddress?: string;
+  browserInfo?: string; // user-agent string
+  attestation?: boolean; // supervisor explicitly attested at confirm time
+  note?: string;
+};
+
+export type VerificationAuditTrail = VerificationAuditEvent[];
+
 // OJT Log Entry model
 export const entries = pgTable("entries", {
   id: serial("id").primaryKey(),
@@ -118,7 +135,8 @@ export const entries = pgTable("entries", {
   dataHash: text("data_hash"), // Hash of all entry data
   integritySignature: text("integrity_signature"), // Server-generated integrity signature
   verificationRequestedAt: timestamp("verification_requested_at"), // When verification was requested
-  auditTrail: json("audit_trail"), // Complete audit trail as JSON
+  verifiedByEmail: text("verified_by_email"), // Email address the verification link was sent to
+  auditTrail: json("audit_trail").$type<VerificationAuditTrail>(), // Complete audit trail as JSON
   supervisorIpAddress: text("supervisor_ip_address"), // Supervisor's IP address during verification
   supervisorBrowserInfo: text("supervisor_browser_info"), // Supervisor's browser info
   employeeIdUsed: text("employee_id_used"), // Which employee ID was used for this entry
@@ -246,7 +264,8 @@ export const ropeHours = pgTable("rope_hours", {
   dataHash: text("data_hash"), // Hash of all entry data
   integritySignature: text("integrity_signature"), // Server-generated integrity signature
   verificationRequestedAt: timestamp("verification_requested_at"), // When verification was requested
-  auditTrail: json("audit_trail"), // Complete audit trail as JSON
+  verifiedByEmail: text("verified_by_email"), // Email address the verification link was sent to
+  auditTrail: json("audit_trail").$type<VerificationAuditTrail>(), // Complete audit trail as JSON
   supervisorIpAddress: text("supervisor_ip_address"), // Supervisor's IP address during verification
   supervisorBrowserInfo: text("supervisor_browser_info"), // Supervisor's browser info
   employeeIdUsed: text("employee_id_used"), // Which employee ID was used for this entry

@@ -19,6 +19,7 @@ import { EditRopeHourDialog } from "@/components/EditRopeHourDialog";
 import { ImportLogDialog } from "@/components/ImportLogDialog";
 import { ImportedLogGroups } from "@/components/ImportedLogGroups";
 import { SourceDocumentLink } from "@/components/SourceDocumentLink";
+import { VerificationProofModal } from "@/components/VerificationProofModal";
 import { useOnlineStatus } from "@/lib/offline/online";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileLogDrawer } from "@/components/MobileLogDrawer";
@@ -43,6 +44,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function RopeHoursPage() {
+  const [proofEntry, setProofEntry] = useState<RopeHours | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [location, setLocation] = useState("");
@@ -607,13 +609,18 @@ export default function RopeHoursPage() {
                           />
                         </div>
                       ) : entry.verified ? (
-                        <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setProofEntry(entry)}
+                          className="flex items-center gap-2 text-green-600 hover:text-green-700 hover:underline"
+                          title="View verification record"
+                        >
                           <User className="h-4 w-4 text-green-600" />
-                          <span className="text-green-600">
+                          <span>
                             Verified by {entry.verifiedBy} on{" "}
                             {entry.verifiedAt ? format(new Date(entry.verifiedAt), "MMM dd, yyyy") : "N/A"}
                           </span>
-                        </div>
+                        </button>
                       ) : null}
                     </div>
                     </div>
@@ -813,6 +820,24 @@ export default function RopeHoursPage() {
         onOpenChange={setExportOpen}
         selectedRopeHours={(ropeHours as RopeHours[]).filter((r) => selectedRopeHourIds.has(r.id))}
       />
+
+      {proofEntry && (
+        <VerificationProofModal
+          open={!!proofEntry}
+          onOpenChange={(open) => !open && setProofEntry(null)}
+          title="Rope hours verification"
+          record={proofEntry}
+          summaryRows={[
+            {
+              label: "Date range",
+              value: `${format(new Date(proofEntry.startDate), "MMM dd, yyyy")} – ${format(new Date(proofEntry.endDate), "MMM dd, yyyy")}`,
+            },
+            { label: "Location", value: proofEntry.location },
+            { label: "Skills", value: proofEntry.skills },
+            { label: "Hours", value: proofEntry.hours.toFixed(1) },
+          ]}
+        />
+      )}
     </div>
   );
 }

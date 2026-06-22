@@ -1,6 +1,6 @@
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Award, BadgeCheck, ShieldCheck } from "lucide-react";
+import { Award, BadgeCheck, FileText, ShieldCheck } from "lucide-react";
 
 type PublicProfile = {
   name: string | null;
@@ -15,12 +15,14 @@ type PublicProfile = {
   };
   rope: { totalHours: number; verifiedHours: number; count: number } | null;
   certifications: {
+    id: number;
     name: string;
     issuingBody: string | null;
     method: string | null;
     level: string | null;
     issueDate: string | null;
     expiryDate: string | null;
+    hasDocument: boolean;
   }[];
 };
 
@@ -63,6 +65,19 @@ export default function PublicProfilePage() {
 
   const hasOjt = data.ojt.byMethod.length > 0;
   const hasCerts = data.certifications.length > 0;
+
+  const viewCertificate = async (certId: number) => {
+    try {
+      const res = await fetch(
+        `/api/public-profile/${token}/certifications/${certId}/document`,
+      );
+      if (!res.ok) throw new Error("Could not open certificate");
+      const { url } = (await res.json()) as { url: string };
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      // Surface nothing intrusive on a public page; the link simply no-ops.
+    }
+  };
 
   return (
     <div className="min-h-screen bg-neutral-100">
@@ -161,19 +176,34 @@ export default function PublicProfilePage() {
                 const expired =
                   c.expiryDate && new Date(c.expiryDate).getTime() < Date.now();
                 return (
-                  <div key={i} className="p-3">
-                    <p className="font-medium text-neutral-900">{c.name}</p>
-                    <p className="text-xs text-neutral-500 mt-0.5">
-                      {[
-                        c.issuingBody,
-                        [c.method, c.level].filter(Boolean).join(" "),
-                        expiry
-                          ? `${expired ? "expired" : "expires"} ${expiry}`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ") || "—"}
-                    </p>
+                  <div
+                    key={c.id ?? i}
+                    className="p-3 flex items-start justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-neutral-900">{c.name}</p>
+                      <p className="text-xs text-neutral-500 mt-0.5">
+                        {[
+                          c.issuingBody,
+                          [c.method, c.level].filter(Boolean).join(" "),
+                          expiry
+                            ? `${expired ? "expired" : "expires"} ${expiry}`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "—"}
+                      </p>
+                    </div>
+                    {c.hasDocument && (
+                      <button
+                        type="button"
+                        onClick={() => viewCertificate(c.id)}
+                        className="shrink-0 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                      >
+                        <FileText className="h-4 w-4" />
+                        View certificate
+                      </button>
+                    )}
                   </div>
                 );
               })}
