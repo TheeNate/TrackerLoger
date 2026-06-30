@@ -10,6 +10,7 @@ import {
   Cable,
   Settings,
   UserCheck,
+  Building2,
 } from "lucide-react";
 import { generatePdf } from "@/lib/pdf";
 import { ConnectivityChip } from "@/components/ConnectivityChip";
@@ -169,6 +170,19 @@ export function ProfileHeader({ user, verifiedEntries }: ProfileHeaderProps) {
               <div className="flex items-center gap-2">
                 <UserCheck className="h-4 w-4" />
                 Signers
+              </div>
+            </button>
+            <button
+              onClick={() => setLocation("/organizations")}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                location === "/organizations"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                Organizations
               </div>
             </button>
             {user.isAdmin && (

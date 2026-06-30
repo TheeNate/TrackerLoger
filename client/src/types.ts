@@ -1,5 +1,24 @@
 import { z } from "zod";
-import { NDTMethods, supervisorQualificationSchema, type Supervisor, type SupervisorQualification } from "@shared/schema";
+import {
+  NDTMethods,
+  supervisorQualificationSchema,
+  type Supervisor,
+  type SupervisorQualification,
+  type Organization,
+  type OrganizationMember,
+} from "@shared/schema";
+
+// A user's membership in an org, as returned by GET /api/organizations.
+export type UserOrgMembership = {
+  organization: Organization;
+  membership: OrganizationMember;
+};
+
+// A member of an org, as returned by GET /api/organizations/:id/members.
+export type OrgMemberEntry = {
+  membership: OrganizationMember;
+  user: { id: number; name: string | null; email: string };
+};
 
 // Entry form validation schema
 export const entryFormSchema = z.object({
@@ -29,6 +48,8 @@ export const supervisorFormSchema = z.object({
   spratNumber: z.string().optional(),
   irataNumber: z.string().optional(),
   company: z.string().optional(),
+  // null = personal signer; a number shares it with that organization.
+  organizationId: z.number().int().nullable().optional(),
   qualifications: z.array(supervisorQualificationSchema),
 });
 

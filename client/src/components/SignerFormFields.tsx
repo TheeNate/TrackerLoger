@@ -1,10 +1,12 @@
 import { UseFormReturn, useFieldArray } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SupervisorFormValues } from "@/types";
-import { NDTMethods, CERTIFICATION_LEVELS } from "@shared/schema";
+import { SIGNER_METHODS, signerMethodLabel, CERTIFICATION_LEVELS } from "@shared/schema";
+import type { UserOrgMembership } from "@/types";
 import { Plus, Trash2 } from "lucide-react";
 
 interface SignerFormFieldsProps {
@@ -16,6 +18,12 @@ export function SignerFormFields({ form }: SignerFormFieldsProps) {
     control: form.control,
     name: "qualifications",
   });
+
+  // Orgs the user can share this signer with (active memberships only).
+  const { data: orgs = [] } = useQuery<UserOrgMembership[]>({
+    queryKey: ["/api/organizations"],
+  });
+  const activeOrgs = orgs.filter((o) => o.membership.status === "active");
 
   return (
     <div className="space-y-4">
@@ -81,6 +89,40 @@ export function SignerFormFields({ form }: SignerFormFieldsProps) {
         />
       </div>
 
+      {activeOrgs.length > 0 && (
+        <FormField
+          control={form.control}
+          name="organizationId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Share with organization</FormLabel>
+              <Select
+                value={field.value != null ? String(field.value) : "personal"}
+                onValueChange={(v) => field.onChange(v === "personal" ? null : Number(v))}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Personal (private)" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="personal">Personal (private)</SelectItem>
+                  {activeOrgs.map((o) => (
+                    <SelectItem key={o.organization.id} value={String(o.organization.id)}>
+                      {o.organization.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-neutral-500">
+                Shared signers are visible to everyone in the organization.
+              </p>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
+
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <FormLabel className="text-sm font-medium">Qualifications</FormLabel>
@@ -109,7 +151,7 @@ export function SignerFormFields({ form }: SignerFormFieldsProps) {
                   name={`qualifications.${index}.method`}
                   render={({ field }) => (
                     <FormItem className="flex-1">
-                      <FormLabel className="text-xs text-neutral-500">NDT Method</FormLabel>
+                      <FormLabel className="text-xs text-neutral-500">Method</FormLabel>
                       <Select value={field.value || undefined} onValueChange={field.onChange}>
                         <FormControl>
                           <SelectTrigger>
@@ -117,9 +159,9 @@ export function SignerFormFields({ form }: SignerFormFieldsProps) {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {Object.keys(NDTMethods).map((m) => (
+                          {Object.keys(SIGNER_METHODS).map((m) => (
                             <SelectItem key={m} value={m}>
-                              {m === "UT_THK" ? "UT Thk." : m}
+                              {signerMethodLabel(m)}
                             </SelectItem>
                           ))}
                         </SelectContent>

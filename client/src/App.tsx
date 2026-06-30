@@ -14,6 +14,7 @@ import AuthPage from "@/pages/AuthPage";
 import ProfilePage from "@/pages/ProfilePage";
 import RopeHoursPage from "@/pages/RopeHoursPage";
 import SignersPage from "@/pages/SignersPage";
+import OrganizationsPage from "@/pages/OrganizationsPage";
 import VerifyPage from "@/pages/VerifyPage";
 import BatchVerifyPage from "@/pages/BatchVerifyPage";
 import PublicProfilePage from "@/pages/PublicProfilePage";
@@ -45,6 +46,11 @@ function Router() {
       <Route path="/signers">
         <ProtectedRoute>
           <SignersPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/organizations">
+        <ProtectedRoute>
+          <OrganizationsPage />
         </ProtectedRoute>
       </Route>
       <Route path="/admin">

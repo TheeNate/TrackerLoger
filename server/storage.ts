@@ -1,6 +1,6 @@
-import { 
+import {
   users, entries, supervisors, ropeHours, userCryptoIdentities, apiTokens,
-  certifications,
+  certifications, organizations, organizationMembers,
   type User, type InsertUser,
   type Entry, type InsertEntry,
   type Supervisor, type InsertSupervisor,
@@ -8,11 +8,12 @@ import {
   type UserCryptoIdentity, type InsertUserCryptoIdentity,
   type ApiToken, type InsertApiToken,
   type Certification, type InsertCertification,
+  type Organization, type OrganizationMember,
   type VerificationAuditEvent, type VerificationAuditTrail
 } from "@shared/schema";
 
 import { db } from "./db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, or, inArray, ilike, desc, sql } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
 // Evidence captured at the moment a supervisor confirms hours. All optional so
@@ -106,6 +107,19 @@ export interface IStorage {
   createSupervisor(supervisor: InsertSupervisor): Promise<Supervisor>;
   updateSupervisor(id: number, updates: Partial<InsertSupervisor>): Promise<Supervisor>;
   deleteSupervisor(id: number): Promise<void>;
+
+  // Organization methods
+  getUserOrganizations(userId: number): Promise<Array<{ organization: Organization; membership: OrganizationMember }>>;
+  getActiveOrgIds(userId: number): Promise<number[]>;
+  getOrganization(id: number): Promise<Organization | undefined>;
+  createOrganization(name: string, createdBy: number): Promise<Organization>;
+  searchOrganizations(query: string, excludeOrgIds: number[]): Promise<Organization[]>;
+  getMembership(organizationId: number, userId: number): Promise<OrganizationMember | undefined>;
+  getMembershipById(id: number): Promise<OrganizationMember | undefined>;
+  requestToJoinOrganization(organizationId: number, userId: number): Promise<OrganizationMember>;
+  getOrganizationMembers(organizationId: number): Promise<Array<{ membership: OrganizationMember; user: User }>>;
+  updateMembership(id: number, updates: Partial<{ role: string; status: string }>): Promise<OrganizationMember>;
+  deleteMembership(id: number): Promise<void>;
   
   // Certification methods
   getCertifications(userId: number): Promise<Certification[]>;
@@ -430,11 +444,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Supervisor methods
+  // Returns the user's own signers plus any signer shared with an org the user
+  // is an active member of.
   async getSupervisors(userId: number): Promise<Supervisor[]> {
-    return await db
-      .select()
-      .from(supervisors)
-      .where(eq(supervisors.userId, userId));
+    const orgIds = await this.getActiveOrgIds(userId);
+    const where = orgIds.length
+      ? or(
+          eq(supervisors.userId, userId),
+          inArray(supervisors.organizationId, orgIds),
+        )
+      : eq(supervisors.userId, userId);
+    return await db.select().from(supervisors).where(where);
   }
 
   async getSupervisor(id: number): Promise<Supervisor | undefined> {
@@ -464,6 +484,125 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSupervisor(id: number): Promise<void> {
     await db.delete(supervisors).where(eq(supervisors.id, id));
+  }
+
+  // Organization methods
+  async getUserOrganizations(
+    userId: number,
+  ): Promise<Array<{ organization: Organization; membership: OrganizationMember }>> {
+    return await db
+      .select({ organization: organizations, membership: organizationMembers })
+      .from(organizationMembers)
+      .innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
+      .where(eq(organizationMembers.userId, userId))
+      .orderBy(desc(organizationMembers.createdAt));
+  }
+
+  async getActiveOrgIds(userId: number): Promise<number[]> {
+    const rows = await db
+      .select({ organizationId: organizationMembers.organizationId })
+      .from(organizationMembers)
+      .where(
+        and(
+          eq(organizationMembers.userId, userId),
+          eq(organizationMembers.status, "active"),
+        ),
+      );
+    return rows.map((r) => r.organizationId);
+  }
+
+  async getOrganization(id: number): Promise<Organization | undefined> {
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, id));
+    return org;
+  }
+
+  async createOrganization(name: string, createdBy: number): Promise<Organization> {
+    const [org] = await db
+      .insert(organizations)
+      .values({ name, createdBy })
+      .returning();
+    // Creator is the founding admin and immediately active.
+    await db.insert(organizationMembers).values({
+      organizationId: org.id,
+      userId: createdBy,
+      role: "admin",
+      status: "active",
+    });
+    return org;
+  }
+
+  async searchOrganizations(query: string, excludeOrgIds: number[]): Promise<Organization[]> {
+    const rows = await db
+      .select()
+      .from(organizations)
+      .where(ilike(organizations.name, `%${query}%`))
+      .orderBy(organizations.name)
+      .limit(20);
+    return excludeOrgIds.length
+      ? rows.filter((o) => !excludeOrgIds.includes(o.id))
+      : rows;
+  }
+
+  async getMembership(
+    organizationId: number,
+    userId: number,
+  ): Promise<OrganizationMember | undefined> {
+    const [m] = await db
+      .select()
+      .from(organizationMembers)
+      .where(
+        and(
+          eq(organizationMembers.organizationId, organizationId),
+          eq(organizationMembers.userId, userId),
+        ),
+      );
+    return m;
+  }
+
+  async getMembershipById(id: number): Promise<OrganizationMember | undefined> {
+    const [m] = await db
+      .select()
+      .from(organizationMembers)
+      .where(eq(organizationMembers.id, id));
+    return m;
+  }
+
+  async requestToJoinOrganization(
+    organizationId: number,
+    userId: number,
+  ): Promise<OrganizationMember> {
+    const [m] = await db
+      .insert(organizationMembers)
+      .values({ organizationId, userId, role: "member", status: "pending" })
+      .returning();
+    return m;
+  }
+
+  async getOrganizationMembers(
+    organizationId: number,
+  ): Promise<Array<{ membership: OrganizationMember; user: User }>> {
+    return await db
+      .select({ membership: organizationMembers, user: users })
+      .from(organizationMembers)
+      .innerJoin(users, eq(users.id, organizationMembers.userId))
+      .where(eq(organizationMembers.organizationId, organizationId))
+      .orderBy(desc(organizationMembers.createdAt));
+  }
+
+  async updateMembership(
+    id: number,
+    updates: Partial<{ role: string; status: string }>,
+  ): Promise<OrganizationMember> {
+    const [updated] = await db
+      .update(organizationMembers)
+      .set(updates)
+      .where(eq(organizationMembers.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteMembership(id: number): Promise<void> {
+    await db.delete(organizationMembers).where(eq(organizationMembers.id, id));
   }
 
   // Certification methods

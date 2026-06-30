@@ -27,8 +27,14 @@ import {
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { SignerFormFields } from "@/components/SignerFormFields";
 import { Pencil, Trash2, UserPlus, UserCheck } from "lucide-react";
-import { Supervisor, User, Entry } from "@shared/schema";
-import { supervisorFormSchema, signerToQualifications, type SupervisorFormValues } from "@/types";
+import { Supervisor, User, Entry, signerMethodLabel } from "@shared/schema";
+import {
+  supervisorFormSchema,
+  signerToQualifications,
+  type SupervisorFormValues,
+  type UserOrgMembership,
+} from "@/types";
+import { Users } from "lucide-react";
 
 const emptyValues: SupervisorFormValues = {
   name: "",
@@ -37,6 +43,7 @@ const emptyValues: SupervisorFormValues = {
   spratNumber: "",
   irataNumber: "",
   company: "",
+  organizationId: null,
   qualifications: [],
 };
 
@@ -58,6 +65,18 @@ export default function SignersPage() {
     enabled: !!user,
   });
 
+  const { data: orgs = [] } = useQuery<UserOrgMembership[]>({
+    queryKey: ["/api/organizations"],
+    enabled: !!user,
+  });
+  // id -> org name, and id -> my role, for badges and edit-permission checks.
+  const orgNameById = new Map(orgs.map((o) => [o.organization.id, o.organization.name]));
+  const myRoleByOrgId = new Map(
+    orgs
+      .filter((o) => o.membership.status === "active")
+      .map((o) => [o.organization.id, o.membership.role]),
+  );
+
   const form = useForm<SupervisorFormValues>({
     resolver: zodResolver(supervisorFormSchema),
     defaultValues: emptyValues,
@@ -78,10 +97,16 @@ export default function SignersPage() {
       spratNumber: signer.spratNumber ?? "",
       irataNumber: signer.irataNumber ?? "",
       company: signer.company ?? "",
+      organizationId: signer.organizationId ?? null,
       qualifications: signerToQualifications(signer),
     });
     setIsFormOpen(true);
   };
+
+  // A signer is editable by its creator, or by an admin of the org it's shared with.
+  const canEditSigner = (signer: Supervisor) =>
+    signer.userId === user?.id ||
+    (signer.organizationId != null && myRoleByOrgId.get(signer.organizationId) === "admin");
 
   const handleSubmit = async (values: SupervisorFormValues) => {
     try {
@@ -90,6 +115,7 @@ export default function SignersPage() {
         spratNumber: values.spratNumber || null,
         irataNumber: values.irataNumber || null,
         company: values.company || null,
+        organizationId: values.organizationId ?? null,
         qualifications: values.qualifications,
       };
 
@@ -136,7 +162,7 @@ export default function SignersPage() {
 
   if (!user) return null;
 
-  const formatMethod = (m: string) => (m === "UT_THK" ? "UT Thk." : m);
+  const formatMethod = (m: string) => signerMethodLabel(m);
   const shortLevel = (lvl: string) =>
     lvl === "Level I" ? "I" : lvl === "Level II" ? "II" : lvl === "Level III" ? "III" : lvl;
 
@@ -190,7 +216,18 @@ export default function SignersPage() {
                 <tbody className="bg-white divide-y divide-neutral-200">
                   {signers.map((signer) => (
                     <tr key={signer.id} className="text-sm text-neutral-900">
-                      <td className="px-3 py-3 font-medium">{signer.name}</td>
+                      <td className="px-3 py-3 font-medium">
+                        <div className="flex flex-col gap-0.5">
+                          <span>{signer.name}</span>
+                          {signer.organizationId != null && (
+                            <span className="inline-flex w-fit items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                              <Users className="h-3 w-3" />
+                              {orgNameById.get(signer.organizationId) ?? "Shared"}
+                              {signer.userId !== user.id ? " · teammate" : ""}
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-3 py-3">{signer.phone}</td>
                       <td className="px-3 py-3">{signer.email}</td>
                       <td className="px-3 py-3">{signer.spratNumber || "—"}</td>
@@ -215,23 +252,29 @@ export default function SignersPage() {
                       </td>
                       <td className="px-3 py-3 text-right">
                         <div className="flex justify-end gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => openEdit(signer)}
-                            aria-label="Edit signer"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => setDeleteTarget(signer)}
-                            aria-label="Delete signer"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {canEditSigner(signer) ? (
+                            <>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => openEdit(signer)}
+                                aria-label="Edit signer"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setDeleteTarget(signer)}
+                                aria-label="Delete signer"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-neutral-400">Read-only</span>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -31,6 +31,7 @@ import {
   canonicalizeSupervisorWrite,
   certificationWriteSchema,
   shareSettingsSchema,
+  createOrganizationSchema,
   NDTMethods,
 } from "@shared/schema";
 import { z } from "zod";
@@ -87,6 +88,34 @@ function buildVerificationEvidence(
     forwardedIp || req.ip || req.socket?.remoteAddress || undefined;
   const browserInfo = req.get("user-agent") || undefined;
   return { ipAddress, browserInfo, attestation: attestation === true };
+}
+
+// A signer can be USED (selected for verification requests) by its creator or
+// by any active member of the org it's shared with.
+async function userCanUseSupervisor(
+  supervisor: { userId: number; organizationId: number | null },
+  userId: number,
+): Promise<boolean> {
+  if (supervisor.userId === userId) return true;
+  if (supervisor.organizationId != null) {
+    const orgIds = await storage.getActiveOrgIds(userId);
+    return orgIds.includes(supervisor.organizationId);
+  }
+  return false;
+}
+
+// A signer can be EDITED/DELETED only by the member who created it, or by an
+// admin of the org it's shared with.
+async function userCanEditSupervisor(
+  supervisor: { userId: number; organizationId: number | null },
+  userId: number,
+): Promise<boolean> {
+  if (supervisor.userId === userId) return true;
+  if (supervisor.organizationId != null) {
+    const m = await storage.getMembership(supervisor.organizationId, userId);
+    if (m && m.status === "active" && m.role === "admin") return true;
+  }
+  return false;
 }
 
 // In server/routes.ts, replace the session configuration with this:
@@ -835,14 +864,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/supervisors", requireAuthOrToken, async (req, res) => {
     try {
+      const userId = req.session.userId!;
       const supervisorData = {
         ...req.body,
-        userId: req.session.userId!,
+        userId,
       };
 
       const parsedData = canonicalizeSupervisorWrite(
         insertSupervisorSchema.parse(supervisorData),
       );
+
+      // If sharing with an org, the creator must be an active member of it.
+      if (parsedData.organizationId != null) {
+        const membership = await storage.getMembership(parsedData.organizationId, userId);
+        if (!membership || membership.status !== "active") {
+          return res.status(403).json({ message: "You are not a member of that organization" });
+        }
+      }
+
       const newSupervisor = await storage.createSupervisor(parsedData);
 
       res.status(201).json(newSupervisor);
@@ -865,10 +904,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const existing = await storage.getSupervisor(id);
       if (!existing) return res.status(404).json({ message: "Signer not found" });
-      if (existing.userId !== userId) return res.status(403).json({ message: "Unauthorized" });
+      if (!(await userCanEditSupervisor(existing, userId))) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
 
       const updateSchema = insertSupervisorSchema.omit({ userId: true }).partial();
       const parsedData = canonicalizeSupervisorWrite(updateSchema.parse(req.body));
+
+      // If (re)sharing with an org, the editor must be an active member of it.
+      if (parsedData.organizationId != null) {
+        const membership = await storage.getMembership(parsedData.organizationId, userId);
+        if (!membership || membership.status !== "active") {
+          return res.status(403).json({ message: "You are not a member of that organization" });
+        }
+      }
 
       const updated = await storage.updateSupervisor(id, parsedData);
       res.json(updated);
@@ -888,13 +937,161 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const existing = await storage.getSupervisor(id);
       if (!existing) return res.status(404).json({ message: "Signer not found" });
-      if (existing.userId !== userId) return res.status(403).json({ message: "Unauthorized" });
+      if (!(await userCanEditSupervisor(existing, userId))) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
 
       await storage.deleteSupervisor(id);
       res.json({ message: "Signer deleted" });
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Error deleting signer" });
+    }
+  });
+
+  // Organization routes — shared signer pools for an employer/company.
+  // Members of the same org see each other's shared signers.
+  app.get("/api/organizations", requireAuth, async (req, res) => {
+    try {
+      const orgs = await storage.getUserOrganizations(req.session.userId!);
+      res.json(orgs);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Error fetching organizations" });
+    }
+  });
+
+  app.post("/api/organizations", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const { name } = createOrganizationSchema.parse(req.body);
+      const org = await storage.createOrganization(name, userId);
+      res.status(201).json(org);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid organization data", errors: error.errors });
+      }
+      console.error(error);
+      res.status(500).json({ message: "Error creating organization" });
+    }
+  });
+
+  // Search existing orgs by name so users join an existing one instead of
+  // creating a duplicate. Excludes orgs the user is already in / has requested.
+  app.get("/api/organizations/search", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const q = String(req.query.q ?? "").trim();
+      if (q.length < 2) return res.json([]);
+      const mine = await storage.getUserOrganizations(userId);
+      const excludeIds = mine.map((m) => m.organization.id);
+      const results = await storage.searchOrganizations(q, excludeIds);
+      res.json(results);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Error searching organizations" });
+    }
+  });
+
+  app.post("/api/organizations/:id/join", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const orgId = parseInt(req.params.id);
+      const org = await storage.getOrganization(orgId);
+      if (!org) return res.status(404).json({ message: "Organization not found" });
+
+      const existing = await storage.getMembership(orgId, userId);
+      if (existing) {
+        return res.status(409).json({
+          message:
+            existing.status === "active"
+              ? "You are already a member"
+              : "You already have a pending request",
+        });
+      }
+
+      const membership = await storage.requestToJoinOrganization(orgId, userId);
+      res.status(201).json(membership);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Error requesting to join organization" });
+    }
+  });
+
+  app.get("/api/organizations/:id/members", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const orgId = parseInt(req.params.id);
+      const me = await storage.getMembership(orgId, userId);
+      if (!me || me.status !== "active") {
+        return res.status(403).json({ message: "You are not a member of this organization" });
+      }
+      const members = await storage.getOrganizationMembers(orgId);
+      // Only expose non-sensitive user fields.
+      const sanitized = members.map((m) => ({
+        membership: m.membership,
+        user: { id: m.user.id, name: m.user.name, email: m.user.email },
+      }));
+      res.json({ role: me.role, members: sanitized });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Error fetching members" });
+    }
+  });
+
+  app.post("/api/organizations/members/:memberId/approve", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const memberId = parseInt(req.params.memberId);
+      const target = await storage.getMembershipById(memberId);
+      if (!target) return res.status(404).json({ message: "Member not found" });
+
+      const me = await storage.getMembership(target.organizationId, userId);
+      if (!me || me.status !== "active" || me.role !== "admin") {
+        return res.status(403).json({ message: "Only an admin can approve members" });
+      }
+
+      const updated = await storage.updateMembership(memberId, { status: "active" });
+      res.json(updated);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Error approving member" });
+    }
+  });
+
+  // Remove a member (admin) or leave the org (self). Never strands the org
+  // without an admin.
+  app.delete("/api/organizations/members/:memberId", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const memberId = parseInt(req.params.memberId);
+      const target = await storage.getMembershipById(memberId);
+      if (!target) return res.status(404).json({ message: "Member not found" });
+
+      const isSelf = target.userId === userId;
+      const me = await storage.getMembership(target.organizationId, userId);
+      const isAdmin = !!me && me.status === "active" && me.role === "admin";
+      if (!isSelf && !isAdmin) {
+        return res.status(403).json({ message: "Not authorized to remove this member" });
+      }
+
+      if (target.role === "admin" && target.status === "active") {
+        const members = await storage.getOrganizationMembers(target.organizationId);
+        const activeAdmins = members.filter(
+          (m) => m.membership.role === "admin" && m.membership.status === "active",
+        );
+        if (activeAdmins.length <= 1) {
+          return res
+            .status(400)
+            .json({ message: "Cannot remove the last admin of the organization" });
+        }
+      }
+
+      await storage.deleteMembership(memberId);
+      res.json({ message: isSelf ? "Left organization" : "Member removed" });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Error removing member" });
     }
   });
 
@@ -1118,8 +1315,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Supervisor not found" });
       }
 
-      // Check if supervisor belongs to user
-      if (supervisor.userId !== userId) {
+      // Creator or an active member of the signer's org may use it.
+      if (!(await userCanUseSupervisor(supervisor, userId))) {
         return res
           .status(403)
           .json({ message: "Unauthorized: Supervisor does not belong to you" });
@@ -1214,8 +1411,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Supervisor not found" });
       }
 
-      // Check if supervisor belongs to user
-      if (supervisor.userId !== userId) {
+      // Creator or an active member of the signer's org may use it.
+      if (!(await userCanUseSupervisor(supervisor, userId))) {
         return res
           .status(403)
           .json({ message: "Unauthorized: Supervisor does not belong to you" });
@@ -1458,7 +1655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const supervisor = await storage.getSupervisor(parseInt(supervisorId));
-      if (!supervisor || supervisor.userId !== userId) {
+      if (!supervisor || !(await userCanUseSupervisor(supervisor, userId))) {
         return res.status(404).json({ message: "Supervisor not found" });
       }
 

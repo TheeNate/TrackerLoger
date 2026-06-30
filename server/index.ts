@@ -75,11 +75,39 @@ async function runMigrations() {
         ADD COLUMN IF NOT EXISTS work_details TEXT,
         ADD COLUMN IF NOT EXISTS max_height TEXT;
     `);
+    // Organizations + memberships: a company whose members share a signer pool.
+    // Created before the supervisors ALTER below, which FKs organization_id here.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS organizations (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS organization_members (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER NOT NULL REFERENCES organizations(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        role TEXT NOT NULL DEFAULT 'member',
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS org_members_org_user_idx
+        ON organization_members(organization_id, user_id);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS org_members_user_idx ON organization_members(user_id);
+    `);
     await client.query(`
       ALTER TABLE supervisors
         ADD COLUMN IF NOT EXISTS sprat_number TEXT,
         ADD COLUMN IF NOT EXISTS irata_number TEXT,
         ADD COLUMN IF NOT EXISTS ndt_method TEXT,
+        ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id),
         ALTER COLUMN certification_level DROP NOT NULL,
         ALTER COLUMN company DROP NOT NULL;
     `);

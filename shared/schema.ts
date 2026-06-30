@@ -25,12 +25,30 @@ export const NDTMethods = {
 
 export type NDTMethod = keyof typeof NDTMethods;
 
+// Methods a signer can be qualified in: every NDT method plus rope access.
+// Kept SEPARATE from NDTMethods on purpose — NDTMethods drives the OJT entry
+// method picker and the NDT PDF form adapters, which must stay NDT-only.
+// Rope access belongs on a signer's qualification list but not in those places.
+export const SIGNER_METHODS = {
+  ...NDTMethods,
+  ROPE_ACCESS: "ROPE_ACCESS",
+} as const;
+
+export type SignerMethod = keyof typeof SIGNER_METHODS;
+
+// Human-friendly label for a signer method (UI display only).
+export function signerMethodLabel(method: string): string {
+  if (method === "UT_THK") return "UT Thk.";
+  if (method === "ROPE_ACCESS") return "Rope Access";
+  return method;
+}
+
 // Certification levels a signer can hold
 export const CERTIFICATION_LEVELS = ["Level I", "Level II", "Level III"] as const;
 
 // A single method+level qualification a signer holds (e.g. UT Level III)
 export const supervisorQualificationSchema = z.object({
-  method: z.enum(Object.keys(NDTMethods) as [string, ...string[]]),
+  method: z.enum(Object.keys(SIGNER_METHODS) as [string, ...string[]]),
   level: z.enum(CERTIFICATION_LEVELS),
 });
 
@@ -97,6 +115,41 @@ export const insertUserSchema = createInsertSchema(users).pick({
   employeeNumber: true,
 });
 
+// Organizations: an employer/company whose members share a pool of signers.
+// A user can belong to many orgs (NDT contractors bounce between employers).
+// The first user to create an org becomes its admin; everyone else joins via
+// an admin-approved request.
+export const organizations = pgTable("organizations", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const ORG_MEMBER_ROLES = ["admin", "member"] as const;
+export const ORG_MEMBER_STATUSES = ["pending", "active"] as const;
+export type OrgMemberRole = (typeof ORG_MEMBER_ROLES)[number];
+export type OrgMemberStatus = (typeof ORG_MEMBER_STATUSES)[number];
+
+// Membership of a user in an org (many-to-many).
+// status: "pending" = requested to join, awaiting admin approval; "active" = approved.
+// role: "admin" can approve/remove members; "member" is a regular member.
+export const organizationMembers = pgTable("organization_members", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organization_id").notNull().references(() => organizations.id),
+  userId: integer("user_id").notNull().references(() => users.id),
+  role: text("role").notNull().default("member"),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type Organization = typeof organizations.$inferSelect;
+export type OrganizationMember = typeof organizationMembers.$inferSelect;
+
+export const createOrganizationSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+});
+
 // One event in a record's verification audit trail (stored as JSON on the
 // record). The trail is an ordered timeline: the request, the supervisor
 // opening the emailed link, and the final confirmation — each stamped with
@@ -157,7 +210,11 @@ export const insertEntrySchema = createInsertSchema(entries).pick({
 // Supervisor / Signer model
 export const supervisors = pgTable("supervisors", {
   id: serial("id").primaryKey(),
+  // The member who created this signer; always the owner for edit/delete.
   userId: integer("user_id").notNull().references(() => users.id),
+  // When set, this signer is shared with every active member of the org and
+  // shows up in their signer list. Null = personal/private to userId.
+  organizationId: integer("organization_id").references(() => organizations.id),
   name: text("name").notNull(),
   email: text("email").notNull(),
   phone: text("phone").notNull(),
@@ -175,6 +232,7 @@ export const supervisors = pgTable("supervisors", {
 export const insertSupervisorSchema = createInsertSchema(supervisors)
   .pick({
     userId: true,
+    organizationId: true,
     name: true,
     email: true,
     phone: true,
@@ -186,6 +244,9 @@ export const insertSupervisorSchema = createInsertSchema(supervisors)
   })
   .extend({
     qualifications: z.array(supervisorQualificationSchema).optional(),
+    // null/absent = personal signer; a number shares it with that org.
+    // Route layer verifies the user is an active member of the org.
+    organizationId: z.number().int().nullable().optional(),
   });
 
 // Certification / qualification a technician holds (ASNT, IRATA, SPRAT,
