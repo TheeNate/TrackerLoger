@@ -39,7 +39,7 @@ Three TypeScript roots, unified by path aliases (`@/` → `client/src`, `@shared
 ## Domain model & core flows
 
 Two parallel record types, each owned by a user and following the same lifecycle:
-- **`entries`** — OJT/NDT hours (date, location, `method`, hours). Methods are the `NDTMethods` enum (ET, RFT, MT, PT, RT, UT_THK, UTSW, PMI, LSI, plus vendor-form additions like PAUT, VT_1..3, VWE, UT).
+- **`entries`** — OJT/NDT hours (date, location, `method`, hours). Methods are the `NDTMethods` enum (ET, RFT, MT, PT, RT, UT_THK, UTSW, PMI, LSI, plus vendor-form additions like PAUT, VT, VWE, UT).
 - **`ropeHours`** — rope-access work (start/end date, location, skills, hours).
 
 Both tables carry the same three feature dimensions:

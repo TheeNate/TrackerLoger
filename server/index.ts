@@ -214,6 +214,33 @@ async function runMigrations() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS oauth_access_tokens_refresh_prefix_idx ON oauth_access_tokens(refresh_token_prefix);
     `);
+    // 2026-07-17: the three VT levels collapsed into a single "VT" method.
+    // Fold any legacy values in existing data so old entries keep working.
+    await client.query(`
+      UPDATE entries SET method = 'VT' WHERE method IN ('VT_1', 'VT_2', 'VT_3');
+    `);
+    await client.query(`
+      UPDATE supervisors SET ndt_method = 'VT' WHERE ndt_method IN ('VT_1', 'VT_2', 'VT_3');
+    `);
+    await client.query(`
+      UPDATE supervisors
+      SET qualifications = (
+        SELECT json_agg(
+          CASE
+            WHEN q->>'method' IN ('VT_1', 'VT_2', 'VT_3')
+            THEN jsonb_set(q::jsonb, '{method}', '"VT"')::json
+            ELSE q
+          END
+        )
+        FROM json_array_elements(qualifications) AS q
+      )
+      WHERE qualifications IS NOT NULL
+        AND json_typeof(qualifications) = 'array'
+        AND qualifications::text ~ 'VT_[123]';
+    `);
+    await client.query(`
+      UPDATE certifications SET method = 'VT' WHERE method IN ('VT_1', 'VT_2', 'VT_3');
+    `);
     log("Database migrations applied successfully");
   } catch (err) {
     log(`Migration error: ${err}`);

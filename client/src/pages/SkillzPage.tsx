@@ -33,9 +33,7 @@ const METHODS: MethodInfo[] = [
   { code: "PMI", name: "Positive Material ID", aliases: "PMI" },
   { code: "LSI", name: "LSI", aliases: "LSI" },
   { code: "PAUT", name: "Phased Array UT", aliases: "phased array" },
-  { code: "VT_1", name: "Visual Testing L1", aliases: "visual level 1" },
-  { code: "VT_2", name: "Visual Testing L2", aliases: "visual level 2" },
-  { code: "VT_3", name: "Visual Testing L3", aliases: "visual level 3" },
+  { code: "VT", name: "Visual Testing", aliases: "visual, visual testing" },
   { code: "VWE", name: "Visual Welding Exam", aliases: "weld visual" },
 ];
 
@@ -88,13 +86,13 @@ Always:
 
 ## NDT method codes
 Map spoken shorthand to ONE of these exact, case-sensitive codes:
-ET, RFT, MT, PT, RT, UT, UT_THK, UTSW, PMI, LSI, PAUT, VT_1, VT_2, VT_3, VWE
+ET, RFT, MT, PT, RT, UT, UT_THK, UTSW, PMI, LSI, PAUT, VT, VWE
 - "UT" / "ultrasonic" -> UT
 - "UT thickness" / "UT thk" -> UT_THK
 - "UT shearwave" / "shear wave" -> UTSW
 - "eddy current" -> ET ; "remote field" -> RFT
 - "mag particle" -> MT ; "dye penetrant" -> PT ; "radiography" -> RT
-- "phased array" -> PAUT ; "visual level 2" -> VT_2 (etc.)
+- "phased array" -> PAUT ; "visual" / "visual testing" -> VT
 If the method is ambiguous (e.g. plain "UT" when they might mean thickness or
 shearwave), ask one quick clarifying question before logging.
 

@@ -5,6 +5,9 @@ import { chunk, EmptyExportError, NothingToExportError } from "../types";
 const METHOD_MAP: Record<string, string> = {
   MT: "MT", PT: "PT",
   UT_THK: "UTT",
+  // Single VT method goes into the form's VT_1 column; legacy per-level
+  // values (from older entries) still map to their own columns.
+  VT: "VT_1",
   VT_1: "VT_1", VT_2: "VT_2", VT_3: "VT_3",
   VWE: "VWE",
 };

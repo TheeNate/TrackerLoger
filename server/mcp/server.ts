@@ -247,7 +247,7 @@ function buildServer(userId: number): McpServer {
     "List all OJT (On-the-Job Training) entries for the authenticated user, newest first.",
     {
       method: z.enum(VALID_METHODS as [string, ...string[]]).optional()
-        .describe("Optional NDT method filter (ET, RFT, MT, PT, RT, UT_THK, UTSW, PMI, LSI, PAUT, VT_1, VT_2, VT_3, VWE, UT)"),
+        .describe("Optional NDT method filter (ET, RFT, MT, PT, RT, UT_THK, UTSW, PMI, LSI, PAUT, VT, VWE, UT)"),
       verified: z.boolean().optional().describe("If set, only return entries with this verified state"),
     },
     async ({ method, verified }) => {
