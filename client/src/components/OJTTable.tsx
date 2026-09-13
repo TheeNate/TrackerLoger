@@ -26,10 +26,13 @@ export function OJTTable({
 }: OJTTableProps) {
   const totals = useMemo(() => {
     const initialTotals: Record<string, number> = {
-      ET: 0, RFT: 0, MT: 0, PT: 0, RT: 0, UT_THK: 0, UTSW: 0, PMI: 0, LSI: 0,
+      ET: 0, RFT: 0, MT: 0, PT: 0, RT: 0, UT_THK: 0, UTSW: 0, PMI: 0, LSI: 0, VT: 0,
     };
     return entries.reduce((acc, entry) => {
-      acc[entry.method] += entry.hours;
+      // VT levels are stored separately (vendor forms need them) but display
+      // as a single VT column.
+      const column = entry.method.startsWith("VT_") ? "VT" : entry.method;
+      acc[column] = (acc[column] ?? 0) + entry.hours;
       return acc;
     }, initialTotals);
   }, [entries]);
@@ -167,6 +170,7 @@ export function OJTTable({
               <th scope="col" className="px-4 py-3 text-left">UTSW</th>
               <th scope="col" className="px-4 py-3 text-left">PMI</th>
               <th scope="col" className="px-4 py-3 text-left">LSI</th>
+              <th scope="col" className="px-4 py-3 text-left">VT</th>
               <th scope="col" className="px-4 py-3 text-left">Supervisor Signature</th>
             </tr>
           </thead>
@@ -195,6 +199,7 @@ export function OJTTable({
               <td className="px-4 py-3 text-sm font-medium text-neutral-900">{totals.UTSW.toFixed(1)}</td>
               <td className="px-4 py-3 text-sm font-medium text-neutral-900">{totals.PMI.toFixed(1)}</td>
               <td className="px-4 py-3 text-sm font-medium text-neutral-900">{totals.LSI.toFixed(1)}</td>
+              <td className="px-4 py-3 text-sm font-medium text-neutral-900">{totals.VT.toFixed(1)}</td>
               <td className="px-4 py-3 text-sm font-medium text-neutral-900"></td>
             </tr>
           </tfoot>
