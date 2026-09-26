@@ -5,10 +5,12 @@ import { chunk, EmptyExportError, NothingToExportError } from "../types";
 const METHOD_MAP: Record<string, string> = {
   MT: "MT", PT: "PT",
   UT_THK: "UTT",
-  // Single VT method goes into the form's VT_1 column; legacy per-level
-  // values (from older entries) still map to their own columns.
-  VT: "VT_1",
   VT_1: "VT_1", VT_2: "VT_2", VT_3: "VT_3",
+  // Legacy: a short-lived change collapsed the three levels into a plain "VT"
+  // and rewrote existing rows. Those rows were all VT_2, and "VT" is no longer
+  // a valid NDTMethods value, so map it back to the VT-2 column — without this
+  // an unmapped method is silently skipped and those hours vanish from exports.
+  VT: "VT_2",
   VWE: "VWE",
 };
 

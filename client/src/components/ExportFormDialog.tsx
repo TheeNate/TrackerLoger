@@ -17,7 +17,7 @@ type FormId = "mistras_ojt_v1" | "curtiss_wright_wer_v1";
 // "N entries will be skipped" preview; the server is the source of truth.
 const SUPPORTED_METHODS: Record<FormId, Set<string>> = {
   mistras_ojt_v1: new Set(["ET", "RFT", "MT", "PT", "RT", "UT_THK", "UTSW", "PAUT", "LSI"]),
-  curtiss_wright_wer_v1: new Set(["MT", "PT", "UT_THK", "VT", "VWE"]),
+  curtiss_wright_wer_v1: new Set(["MT", "PT", "UT_THK", "VT_1", "VT_2", "VT_3", "VWE"]),
 };
 
 const FORM_LABELS: Record<FormId, string> = {
