@@ -205,8 +205,9 @@ export default function VerifyPage() {
                 onChange={(e) => setAttested(e.target.checked)}
               />
               <span>
-                I confirm that I directly supervised these hours and that the
-                details above are accurate to the best of my knowledge.
+                I confirm that these hours are true and correct, that the
+                details above are accurate to the best of my knowledge, and
+                that I am authorized to verify them.
               </span>
             </label>
 

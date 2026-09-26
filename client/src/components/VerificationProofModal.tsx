@@ -107,8 +107,9 @@ export function VerificationProofModal({
           {/* Attestation */}
           {attested && (
             <p className="text-neutral-700 italic border-l-2 border-green-400 pl-3">
-              The supervisor attested that they directly supervised these hours
-              and that the details are accurate.
+              The verifier attested that these hours are true and correct, that
+              the details are accurate, and that they were authorized to verify
+              them.
             </p>
           )}
 
