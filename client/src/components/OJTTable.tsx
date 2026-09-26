@@ -29,8 +29,7 @@ export function OJTTable({
       ET: 0, RFT: 0, MT: 0, PT: 0, RT: 0, UT_THK: 0, UTSW: 0, PMI: 0, LSI: 0, VT: 0,
     };
     return entries.reduce((acc, entry) => {
-      // VT levels are stored separately (vendor forms need them) but display
-      // as a single VT column.
+      // Legacy per-level VT rows still total under the single VT column.
       const column = entry.method.startsWith("VT_") ? "VT" : entry.method;
       acc[column] = (acc[column] ?? 0) + entry.hours;
       return acc;

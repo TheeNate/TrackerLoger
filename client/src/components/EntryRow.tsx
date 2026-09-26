@@ -179,7 +179,8 @@ export function EntryRow({
 
   const cellTextClass = isImported ? "text-neutral-500" : "text-neutral-900";
 
-  // A column can cover several stored methods (e.g. VT shows VT_1/VT_2/VT_3).
+  // A column can cover several stored methods (e.g. VT shows the current VT
+  // plus legacy VT_1/VT_2/VT_3 rows).
   const createHourCell = (...methods: string[]) => {
     if (methods.includes(entry.method)) {
       return (
@@ -242,7 +243,7 @@ export function EntryRow({
       {createHourCell("UTSW")}
       {createHourCell("PMI")}
       {createHourCell("LSI")}
-      {createHourCell("VT_1", "VT_2", "VT_3")}
+      {createHourCell("VT", "VT_1", "VT_2", "VT_3")}
       <td className="px-4 py-3 whitespace-nowrap text-sm">
         {showPendingControls ? (
           <div className="flex items-center gap-2 flex-wrap">
