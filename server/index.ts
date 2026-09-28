@@ -214,6 +214,16 @@ async function runMigrations() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS oauth_access_tokens_refresh_prefix_idx ON oauth_access_tokens(refresh_token_prefix);
     `);
+    // 2026-09-28: undo the short-lived VT collapse. VT_1/VT_2/VT_3 are stored
+    // separately again because the Curtiss-Wright form has a printed column per
+    // level, so the level has to survive into the export. That collapse rewrote
+    // existing rows to a plain "VT", which is no longer a valid NDTMethods
+    // value — so any remaining "VT" row is an orphan from it. Every affected
+    // row was VT_2 before it ran (there were no VT_1/VT_3 entries), so fold
+    // them back to VT_2. Idempotent: after this runs no "VT" rows remain.
+    await client.query(`
+      UPDATE entries SET method = 'VT_2' WHERE method = 'VT';
+    `);
     log("Database migrations applied successfully");
   } catch (err) {
     log(`Migration error: ${err}`);
