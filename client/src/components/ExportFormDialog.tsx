@@ -11,17 +11,21 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import type { Entry } from "@shared/schema";
 
-type FormId = "mistras_ojt_v1" | "curtiss_wright_wer_v1";
+type FormId = "lendt_ojt_v1" | "curtiss_wright_wer_v1";
 
 // Methods each form actually has a column for. Used only for the
 // "N entries will be skipped" preview; the server is the source of truth.
 const SUPPORTED_METHODS: Record<FormId, Set<string>> = {
-  mistras_ojt_v1: new Set(["ET", "RFT", "MT", "PT", "RT", "UT_THK", "UTSW", "PAUT", "LSI"]),
+  // Lê NDT draws a column for whichever methods the export uses.
+  lendt_ojt_v1: new Set([
+    "ET", "RFT", "MT", "PT", "RT", "UT", "UT_THK", "UTSW", "PMI", "LSI", "PAUT",
+    "VT_1", "VT_2", "VT_3", "VWE",
+  ]),
   curtiss_wright_wer_v1: new Set(["MT", "PT", "UT_THK", "VT_1", "VT_2", "VT_3", "VWE"]),
 };
 
 const FORM_LABELS: Record<FormId, string> = {
-  mistras_ojt_v1: "MISTRAS — Experience Hours (OJT)",
+  lendt_ojt_v1: "Lê NDT — Experience Hours (OJT)",
   curtiss_wright_wer_v1: "Curtiss-Wright — Work Experience Record",
 };
 
@@ -37,7 +41,7 @@ export function ExportFormDialog({
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [formId, setFormId] = useState<FormId>("mistras_ojt_v1");
+  const [formId, setFormId] = useState<FormId>("lendt_ojt_v1");
   const [employeeName, setEmployeeName] = useState(user?.name ?? "");
   const [employeeNumber, setEmployeeNumber] = useState(user?.employeeNumber ?? "");
   const [jobNumber, setJobNumber] = useState("");
@@ -48,16 +52,16 @@ export function ExportFormDialog({
     return selectedEntries.filter((e) => !supported.has(e.method)).length;
   }, [formId, selectedEntries]);
 
-  // MISTRAS fits 16 rows per page; longer exports paginate automatically.
+  // Lê NDT fits 16 rows per page; longer exports paginate automatically.
   // (Curtiss-Wright groups by week, so a row-based page count wouldn't apply.)
-  const mistrasPageCount =
-    formId === "mistras_ojt_v1" ? Math.ceil(selectedEntries.length / 16) : 1;
+  const lendtPageCount =
+    formId === "lendt_ojt_v1" ? Math.ceil(selectedEntries.length / 16) : 1;
 
   async function handleDownload() {
     setDownloading(true);
     try {
       const header_overrides: Record<string, string> = {};
-      if (formId === "mistras_ojt_v1") {
+      if (formId === "lendt_ojt_v1") {
         if (employeeName) header_overrides.employee_name = employeeName;
         if (employeeName) header_overrides.employee_signature = employeeName;
         if (employeeNumber) header_overrides.employee_number = employeeNumber;
@@ -122,7 +126,7 @@ export function ExportFormDialog({
               onValueChange={(v) => setFormId(v as FormId)}
               className="mt-2"
             >
-              {(["mistras_ojt_v1", "curtiss_wright_wer_v1"] as FormId[]).map((id) => (
+              {(["lendt_ojt_v1", "curtiss_wright_wer_v1"] as FormId[]).map((id) => (
                 <div key={id} className="flex items-center space-x-2">
                   <RadioGroupItem value={id} id={id} />
                   <Label htmlFor={id} className="font-normal">{FORM_LABELS[id]}</Label>
@@ -138,16 +142,16 @@ export function ExportFormDialog({
             </p>
           )}
 
-          {mistrasPageCount > 1 && (
+          {lendtPageCount > 1 && (
             <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
-              {selectedEntries.length} rows will be split across {mistrasPageCount} pages
+              {selectedEntries.length} rows will be split across {lendtPageCount} pages
               (16 per page).
             </p>
           )}
 
           <div className="space-y-2">
             <Label htmlFor="employee-name">
-              {formId === "mistras_ojt_v1" ? "Employee name" : "Name"}
+              {formId === "lendt_ojt_v1" ? "Employee name" : "Name"}
             </Label>
             <Input
               id="employee-name"
@@ -156,7 +160,7 @@ export function ExportFormDialog({
             />
           </div>
 
-          {formId === "mistras_ojt_v1" ? (
+          {formId === "lendt_ojt_v1" ? (
             <div className="space-y-2">
               <Label htmlFor="employee-number">Employee number</Label>
               <Input

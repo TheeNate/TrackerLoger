@@ -278,7 +278,7 @@ describe("MCP tools/list and tools/call", () => {
 
     const res = await rpc(app, bearer, "tools/call", {
       name: "export_form",
-      arguments: { formId: "mistras_ojt_v1", entryIds: [1] },
+      arguments: { formId: "lendt_ojt_v1", entryIds: [1] },
     });
     const payload = parseSseOrJson(res.text || res.body);
     const result = payload.result as { structuredContent?: { url: string; byteSize: number; filename: string }; content: Array<{ text: string }>; isError?: boolean };
@@ -290,7 +290,7 @@ describe("MCP tools/list and tools/call", () => {
     }
     expect(result.structuredContent?.url).toMatch(/\/api\/mcp-exports\//);
     expect(result.structuredContent?.byteSize).toBeGreaterThan(0);
-    expect(result.structuredContent?.filename).toContain("mistras_ojt_v1");
+    expect(result.structuredContent?.filename).toContain("lendt_ojt_v1");
 
     // And the URL must actually serve the PDF
     const exportId = result.structuredContent!.url.split("/").pop()!;

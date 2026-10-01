@@ -1,7 +1,7 @@
 import type { Entry, RopeHours, Supervisor, User } from "@shared/schema";
 
 export type FormId =
-  | "mistras_ojt_v1"
+  | "lendt_ojt_v1"
   | "curtiss_wright_wer_v1"
   | "sprat_log_v1"
   | "irata_log_v1";

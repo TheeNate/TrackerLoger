@@ -1,0 +1,50 @@
+{
+  "form_id": "lendt_ojt_v1",
+  "company": "Lê NDT & Solutions",
+  "form_title": "Experience Hours (OJT)",
+  "blank_pdf": null,
+  "blank_built_by": "server/forms/lendt_blank.ts (buildLendtBlank)",
+  "page_count": 1,
+  "dynamic_columns": "Only method columns that have hours in the export are drawn, so the field set varies per export. row_<N>_<methodCode> and total_<methodCode> exist only for those columns.",
+  "method_codes": ["ET", "RFT", "MT", "PT", "RT", "UT", "UT_THK", "UTSW", "PMI", "LSI", "PAUT", "VT_1", "VT_2", "VT_3", "VWE"],
+  "method_code_labels": {
+    "ET": "Eddy Current Testing",
+    "RFT": "Remote Field Testing",
+    "MT": "Magnetic Particle Testing",
+    "PT": "Penetrant Testing (Liquid Penetrant)",
+    "RT": "Radiographic Testing",
+    "UT": "Ultrasonic Testing",
+    "UT_THK": "Ultrasonic Thickness",
+    "UTSW": "Ultrasonic Shear Wave",
+    "PMI": "Positive Material Identification",
+    "LSI": "LSI",
+    "PAUT": "Phased Array Ultrasonic Testing",
+    "VT_1": "Visual Testing Level 1",
+    "VT_2": "Visual Testing Level 2 (also legacy plain VT rows)",
+    "VT_3": "Visual Testing Level 3",
+    "VWE": "Visual Welding Examination"
+  },
+  "max_entry_rows": 16,
+  "fields": {
+    "header": {
+      "employee_name": { "pdf_field": "employee_name", "type": "text", "label": "Employee Name (Print)" },
+      "employee_number": { "pdf_field": "employee_number", "type": "text", "label": "Employee Number" }
+    },
+    "rows_template": {
+      "description": "There are 16 rows. PDF field names follow: row_<N>_<key> where N is 1..16.",
+      "keys": {
+        "date": { "label": "Job Date", "format": "M/D/YYYY" },
+        "location": { "label": "Job Location", "format": "free text" },
+        "<methodCode>": { "label": "hours for that method (only for columns present)", "format": "decimal hours" },
+        "supervisor": { "label": "Supervisor Signature (typed)", "format": "free text / initials" }
+      }
+    },
+    "totals": {
+      "description": "Total Hours row at bottom of table. PDF field names: total_<methodCode>, only for columns present."
+    },
+    "signature": {
+      "employee_signature": { "pdf_field": "employee_signature", "type": "text", "label": "Employee Signature" },
+      "signature_date": { "pdf_field": "signature_date", "type": "text", "label": "Signature Date" }
+    }
+  }
+}

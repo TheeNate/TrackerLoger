@@ -93,7 +93,7 @@ describe("POST /api/export-form", () => {
   it("returns 422 for empty entry_ids", async () => {
     const res = await request(app)
       .post("/api/export-form")
-      .send({ form_id: "mistras_ojt_v1", entry_ids: [] });
+      .send({ form_id: "lendt_ojt_v1", entry_ids: [] });
     expect(res.status).toBe(422);
     expect(res.body.code).toBe("empty_export");
   });
@@ -102,7 +102,7 @@ describe("POST /api/export-form", () => {
     storageMock.getEntries.mockResolvedValue([makeEntry(1, "MT", "2026-05-04T00:00:00Z")]);
     const res = await request(app)
       .post("/api/export-form")
-      .send({ form_id: "mistras_ojt_v1", entry_ids: [1, 999] });
+      .send({ form_id: "lendt_ojt_v1", entry_ids: [1, 999] });
     expect(res.status).toBe(403);
     expect(res.body.code).toBe("entry_not_found");
   });
@@ -114,7 +114,7 @@ describe("POST /api/export-form", () => {
     ]);
     const res = await request(app)
       .post("/api/export-form")
-      .send({ form_id: "mistras_ojt_v1", entry_ids: [1, 2] })
+      .send({ form_id: "lendt_ojt_v1", entry_ids: [1, 2] })
       .buffer(true);
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toMatch(/application\/pdf/);
@@ -122,13 +122,13 @@ describe("POST /api/export-form", () => {
     expect(res.body.slice(0, 4).toString()).toBe("%PDF");
   });
 
-  it("returns a multi-page PDF when MISTRAS gets more than 16 entries (no row cap)", async () => {
+  it("returns a multi-page PDF when Lê NDT gets more than 16 entries (no row cap)", async () => {
     const entries = Array.from({ length: 40 }, (_, i) =>
       makeEntry(i + 1, "MT", new Date(Date.UTC(2026, 0, 1 + i)).toISOString()));
     storageMock.getEntries.mockResolvedValue(entries);
     const res = await request(app)
       .post("/api/export-form")
-      .send({ form_id: "mistras_ojt_v1", entry_ids: entries.map((e) => e.id) })
+      .send({ form_id: "lendt_ojt_v1", entry_ids: entries.map((e) => e.id) })
       .buffer(true);
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toMatch(/application\/pdf/);

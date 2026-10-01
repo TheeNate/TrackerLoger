@@ -1,21 +1,27 @@
 import path from "path";
-import { mistrasAdapter } from "./adapters/mistras_ojt_v1";
+import type { Entry } from "@shared/schema";
+import { lendtAdapter, lendtColumnsFor } from "./adapters/lendt_ojt_v1";
+import { buildLendtBlank } from "./lendt_blank";
 import { cwAdapter } from "./adapters/curtiss_wright_wer_v1";
 import { spratAdapter } from "./adapters/sprat_log_v1";
 import { irataAdapter } from "./adapters/irata_log_v1";
 import { BLANKS_DIR, SCHEMAS_DIR } from "./paths";
 import type { Adapter, FormId, RopeAdapter } from "./types";
 
+// An OJT form's blank is either a fixed AcroForm on disk (blankPath) or drawn
+// per export from the selected entries (buildBlank) when its layout depends
+// on them.
 export type RegistryEntry =
   | { kind: "ojt";  blankPath: string; schemaPath: string; adapter: Adapter }
+  | { kind: "ojt";  buildBlank: (entries: Entry[]) => Promise<Uint8Array>; schemaPath: string; adapter: Adapter }
   | { kind: "rope"; blankPath: string; schemaPath: string; adapter: RopeAdapter };
 
 export const registry: Record<FormId, RegistryEntry> = {
-  mistras_ojt_v1: {
+  lendt_ojt_v1: {
     kind: "ojt",
-    blankPath: path.join(BLANKS_DIR, "MISTRAS_OJT_Fillable.pdf"),
-    schemaPath: path.join(SCHEMAS_DIR, "mistras_ojt_v1.schema.json"),
-    adapter: mistrasAdapter,
+    buildBlank: (entries) => buildLendtBlank(lendtColumnsFor(entries)),
+    schemaPath: path.join(SCHEMAS_DIR, "lendt_ojt_v1.schema.json"),
+    adapter: lendtAdapter,
   },
   curtiss_wright_wer_v1: {
     kind: "ojt",
@@ -39,7 +45,7 @@ export const registry: Record<FormId, RegistryEntry> = {
 
 export function isFormId(value: unknown): value is FormId {
   return (
-    value === "mistras_ojt_v1" ||
+    value === "lendt_ojt_v1" ||
     value === "curtiss_wright_wer_v1" ||
     value === "sprat_log_v1" ||
     value === "irata_log_v1"

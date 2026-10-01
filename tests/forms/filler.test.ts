@@ -4,26 +4,32 @@ import { promises as fs } from "fs";
 import { PDFDocument } from "pdf-lib";
 import { fillForm } from "../../server/forms/filler";
 
-const MISTRAS_BLANK = path.resolve(
-  __dirname, "..", "..", "server", "forms", "blanks", "MISTRAS_OJT_Fillable.pdf",
+const CW_BLANK = path.resolve(
+  __dirname, "..", "..", "server", "forms", "blanks", "CurtissWright_WorkExperience_Fillable.pdf",
 );
 
 describe("fillForm", () => {
   it("writes a value into a named field and the value reads back", async () => {
-    const out = await fillForm(MISTRAS_BLANK, {
-      employee_name: "Round Trip",
-      employee_number: "12345",
+    const out = await fillForm(CW_BLANK, {
+      name: "Round Trip",
+      job_number: "12345",
     });
 
     const reopened = await PDFDocument.load(out);
     const form = reopened.getForm();
-    expect(form.getTextField("employee_name").getText()).toBe("Round Trip");
-    expect(form.getTextField("employee_number").getText()).toBe("12345");
+    expect(form.getTextField("name").getText()).toBe("Round Trip");
+    expect(form.getTextField("job_number").getText()).toBe("12345");
+  });
+
+  it("accepts blank bytes as well as a path", async () => {
+    const out = await fillForm(await fs.readFile(CW_BLANK), { name: "From Bytes" });
+    const reopened = await PDFDocument.load(out);
+    expect(reopened.getForm().getTextField("name").getText()).toBe("From Bytes");
   });
 
   it("sets /NeedAppearances=true on the AcroForm dict", async () => {
-    const out = await fillForm(MISTRAS_BLANK, { employee_name: "x" });
-    // The blank uses compressed object streams (ObjStm), so a raw-byte textual
+    const out = await fillForm(CW_BLANK, { name: "x" });
+    // Blanks may use compressed object streams (ObjStm), so a raw-byte textual
     // probe is unreliable. Reload the output and verify via pdf-lib's own API.
     const reopened = await PDFDocument.load(out);
     const { PDFName } = await import("pdf-lib");
@@ -34,12 +40,6 @@ describe("fillForm", () => {
   });
 });
 
-const CW_BLANK = path.resolve(
-  __dirname, "..", "..", "server", "forms", "blanks", "CurtissWright_WorkExperience_Fillable.pdf",
-);
-const MISTRAS_SCHEMA = path.resolve(
-  __dirname, "..", "..", "server", "forms", "schemas", "mistras_ojt_v1.schema.json",
-);
 const CW_SCHEMA = path.resolve(
   __dirname, "..", "..", "server", "forms", "schemas", "curtiss_wright_wer_v1.schema.json",
 );
@@ -56,12 +56,6 @@ async function fieldNamesInSchema(schemaPath: string): Promise<string[]> {
 }
 
 describe("blank ↔ schema field-name parity", () => {
-  it("MISTRAS blank matches its schema", async () => {
-    const inBlank = await fieldNamesInBlank(MISTRAS_BLANK);
-    const inSchema = await fieldNamesInSchema(MISTRAS_SCHEMA);
-    expect(inBlank).toEqual(inSchema);
-  });
-
   it("Curtiss-Wright blank matches its schema", async () => {
     const inBlank = await fieldNamesInBlank(CW_BLANK);
     const inSchema = await fieldNamesInSchema(CW_SCHEMA);

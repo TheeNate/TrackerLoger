@@ -321,7 +321,7 @@ export default function SkillzPage() {
                 <li>Log, list, update, and delete OJT and rope-access hours</li>
                 <li>See running totals by NDT method</li>
                 <li>Add supervisors (signers) and request verification emails</li>
-                <li>Generate vendor PDF forms (Mistras, Curtiss-Wright, SPRAT, IRATA)</li>
+                <li>Generate vendor PDF forms (Lê NDT, Curtiss-Wright, SPRAT, IRATA)</li>
               </ul>
             </div>
           </CardContent>

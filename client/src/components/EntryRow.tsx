@@ -244,6 +244,7 @@ export function EntryRow({
       {createHourCell("PMI")}
       {createHourCell("LSI")}
       {createHourCell("VT", "VT_1", "VT_2", "VT_3")}
+      {createHourCell("VWE")}
       <td className="px-4 py-3 whitespace-nowrap text-sm">
         {showPendingControls ? (
           <div className="flex items-center gap-2 flex-wrap">
