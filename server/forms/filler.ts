@@ -14,19 +14,18 @@ function setNeedAppearances(doc: PDFDocument): void {
 }
 
 /**
- * Load a blank AcroForm PDF (a path, or bytes for blanks built per export),
- * set named text-field values, and return the updated bytes. Fields stay
- * editable in the resulting PDF.
+ * Load a blank AcroForm PDF, set named text-field values, and return the
+ * updated bytes. Fields stay editable in the resulting PDF.
  *
  * Sets /NeedAppearances=true on the AcroForm dict so values render in viewers
  * that don't compute appearances themselves. Skips pdf-lib's own appearance
  * generation (which would embed a font and bloat the output).
  */
 export async function fillForm(
-  blank: string | Uint8Array,
+  blankPath: string,
   values: FieldValues,
 ): Promise<Uint8Array> {
-  const bytes = typeof blank === "string" ? await fs.readFile(blank) : blank;
+  const bytes = await fs.readFile(blankPath);
   const doc = await PDFDocument.load(bytes);
   const form = doc.getForm();
 
@@ -54,14 +53,14 @@ export async function fillForm(
  * AcroForm is sufficient. NeedAppearances drives rendering, same as fillForm.
  */
 export async function fillFormPages(
-  blank: string | Uint8Array,
+  blankPath: string,
   pages: FieldValues[],
 ): Promise<Uint8Array> {
   if (pages.length <= 1) {
-    return fillForm(blank, pages[0] ?? {});
+    return fillForm(blankPath, pages[0] ?? {});
   }
 
-  const blankBytes = typeof blank === "string" ? await fs.readFile(blank) : blank;
+  const blankBytes = await fs.readFile(blankPath);
   const outDoc = await PDFDocument.create();
   const fieldRefs: PDFRef[] = [];
 

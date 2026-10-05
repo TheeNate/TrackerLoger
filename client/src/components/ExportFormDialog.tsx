@@ -16,11 +16,8 @@ type FormId = "lendt_ojt_v1" | "curtiss_wright_wer_v1";
 // Methods each form actually has a column for. Used only for the
 // "N entries will be skipped" preview; the server is the source of truth.
 const SUPPORTED_METHODS: Record<FormId, Set<string>> = {
-  // Lê NDT draws a column for whichever methods the export uses.
-  lendt_ojt_v1: new Set([
-    "ET", "RFT", "MT", "PT", "RT", "UT", "UT_THK", "UTSW", "PMI", "LSI", "PAUT",
-    "VT_1", "VT_2", "VT_3", "VWE",
-  ]),
+  // Plain "VT" is a legacy value the form puts in its VT-2 column.
+  lendt_ojt_v1: new Set(["MT", "PT", "UT", "VT_1", "VT_2", "VT_3", "VT", "VWE"]),
   curtiss_wright_wer_v1: new Set(["MT", "PT", "UT_THK", "VT_1", "VT_2", "VT_3", "VWE"]),
 };
 

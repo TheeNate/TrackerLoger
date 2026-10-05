@@ -1,21 +1,17 @@
-import type { Entry } from "@shared/schema";
 import type { Adapter, FieldValues } from "../types";
 import { chunk, EmptyExportError, NothingToExportError } from "../types";
 
-// Every method column the Lê NDT form can carry, in print order. An export
-// only draws the ones its entries actually use (see lendtColumnsFor), so the
-// PDF field names are row_<N>_<column> / total_<column> for that subset.
-export const LENDT_COLUMNS = [
-  "ET", "RFT", "MT", "PT", "RT", "UT", "UT_THK", "UTSW", "PMI", "LSI", "PAUT",
-  "VT_1", "VT_2", "VT_3", "VWE",
-] as const;
+// Method columns on the Lê NDT form, in print order. The blank is generated
+// from this list (scripts/gen-lendt-blank.ts), so the PDF field names are
+// row_<N>_<column> / total_<column>.
+export const LENDT_COLUMNS = ["MT", "PT", "UT", "VT_1", "VT_2", "VT_3", "VWE"] as const;
 
 export type LendtColumn = (typeof LENDT_COLUMNS)[number];
 
 export const LENDT_MAX_ROWS = 16;
 
-// Per-form method map: every stored method has its own column. Methods absent
-// here have no column and their hours are skipped (date+location still occupy
+// Per-form method map: identity for every column. Methods absent here have no
+// column on this form and their hours are skipped (date+location still occupy
 // the row).
 const METHOD_MAP: Record<string, LendtColumn> = {
   ...(Object.fromEntries(LENDT_COLUMNS.map((c) => [c, c])) as Record<LendtColumn, LendtColumn>),
@@ -24,20 +20,6 @@ const METHOD_MAP: Record<string, LendtColumn> = {
   // the VT-2 column (same rule as the Curtiss-Wright form).
   VT: "VT_2",
 };
-
-/**
- * The method columns an export needs: only those the given entries have hours
- * in, in the form's fixed print order. Computed over the whole export so every
- * page of a multi-page export carries the same columns.
- */
-export function lendtColumnsFor(entries: Entry[]): LendtColumn[] {
-  const used = new Set<LendtColumn>();
-  for (const entry of entries) {
-    const col = METHOD_MAP[entry.method];
-    if (col) used.add(col);
-  }
-  return LENDT_COLUMNS.filter((c) => used.has(c));
-}
 
 /**
  * Format a Date as M/d/yyyy using UTC components. Entry dates are stored as

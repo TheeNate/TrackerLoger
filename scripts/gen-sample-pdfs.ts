@@ -31,32 +31,21 @@ function entry(id: number, date: string, method: string, hours: number, location
 async function main() {
   await fs.mkdir(OUT_DIR, { recursive: true });
 
-  // Lê NDT samples — the form only draws columns for methods with hours, so
-  // render a few mixes: three methods, the VT levels, and every method.
-  const lendt = registry.lendt_ojt_v1;
-  if (!("buildBlank" in lendt)) throw new Error("lendt_ojt_v1 should build its blank");
-  const allMethods = ["ET", "RFT", "MT", "PT", "RT", "UT", "UT_THK", "UTSW", "PMI", "LSI", "PAUT", "VT_1", "VT_2", "VT_3", "VWE"];
-  const lendtSamples: Record<string, Entry[]> = {
-    lendt_3col: [
-      entry(1, "2026-04-06T00:00:00Z", "MT",  4,   "Refinery 1", "John Lead"),
-      entry(2, "2026-04-07T00:00:00Z", "RT",  5,   "Pipeline A", "John Lead"),
-      entry(3, "2026-04-08T00:00:00Z", "VWE", 6,   "Fab Shop"),
-      entry(4, "2026-04-09T00:00:00Z", "RT",  7.5, "Pipeline A"),
-    ],
-    lendt_vt_levels: [
-      entry(1, "2026-04-06T00:00:00Z", "VT_1", 4, "Plant C", "John Lead"),
-      entry(2, "2026-04-07T00:00:00Z", "VT_2", 3, "Plant C", "John Lead"),
-      entry(3, "2026-04-08T00:00:00Z", "VT_3", 2, "Plant C"),
-    ],
-    lendt_all: allMethods.map((m, i) =>
-      entry(i + 1, new Date(Date.UTC(2026, 3, 6 + i)).toISOString(), m, 1.5 + i, "Refinery 1", i % 2 ? "John Lead" : null)),
-  };
-  for (const [name, entries] of Object.entries(lendtSamples)) {
-    const pages = lendt.adapter({ entries, profile: profile() });
-    const bytes = await fillFormPages(await lendt.buildBlank(entries), pages);
-    await fs.writeFile(path.join(OUT_DIR, `${name}_sample.pdf`), bytes);
-    console.log("Wrote", path.join(OUT_DIR, `${name}_sample.pdf`));
-  }
+  // Lê NDT sample — every column on the form, plus an RT row it skips.
+  const lendtEntries: Entry[] = [
+    entry(1, "2026-04-06T00:00:00Z", "MT",   4,   "Refinery 1", "John Lead"),
+    entry(2, "2026-04-07T00:00:00Z", "PT",   3,   "Refinery 1", "John Lead"),
+    entry(3, "2026-04-08T00:00:00Z", "UT",   6,   "Refinery 2"),
+    entry(4, "2026-04-09T00:00:00Z", "VT_1", 2.5, "Plant C", "John Lead"),
+    entry(5, "2026-04-10T00:00:00Z", "VT_2", 5,   "Plant C"),
+    entry(6, "2026-04-13T00:00:00Z", "VT_3", 1.5, "Plant C"),
+    entry(7, "2026-04-14T00:00:00Z", "VWE",  8,   "Fab Shop", "John Lead"),
+    entry(8, "2026-04-15T00:00:00Z", "RT",   3.5, "Pipeline A"),
+  ];
+  const lendtPages = registry.lendt_ojt_v1.adapter({ entries: lendtEntries, profile: profile() });
+  const lendtBytes = await fillFormPages(registry.lendt_ojt_v1.blankPath, lendtPages);
+  await fs.writeFile(path.join(OUT_DIR, "lendt_sample.pdf"), lendtBytes);
+  console.log("Wrote", path.join(OUT_DIR, "lendt_sample.pdf"));
 
   // CW sample — two weeks of entries (UTC dates).
   const cwEntries: Entry[] = [
@@ -75,9 +64,7 @@ async function main() {
     profile: profile(),
     headerOverrides: { job_number: "JOB-2026-04" },
   });
-  const cw = registry.curtiss_wright_wer_v1;
-  if (!("blankPath" in cw)) throw new Error("curtiss_wright_wer_v1 should have a fixed blank");
-  const cwBytes = await fillFormPages(cw.blankPath, cwValues);
+  const cwBytes = await fillFormPages(registry.curtiss_wright_wer_v1.blankPath, cwValues);
   await fs.writeFile(path.join(OUT_DIR, "curtiss_wright_sample.pdf"), cwBytes);
   console.log("Wrote", path.join(OUT_DIR, "curtiss_wright_sample.pdf"));
 }

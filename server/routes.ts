@@ -778,8 +778,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     let pages;
     let earliestMs: number, latestMs: number;
-    // Fixed blank on disk, unless the form draws its blank from the selection.
-    let blank: () => Promise<string | Uint8Array>;
     try {
       if (entryDef.kind === "ojt") {
         const userEntries = await storage.getEntries(userId);
@@ -795,8 +793,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           profile,
           headerOverrides: header_overrides,
         });
-        blank = async () =>
-          "buildBlank" in entryDef ? entryDef.buildBlank(selected) : entryDef.blankPath;
         const dates = selected.map((e) => e.date.getTime()).sort();
         earliestMs = dates[0];
         latestMs = dates[dates.length - 1];
@@ -816,7 +812,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           supervisors,
           headerOverrides: header_overrides,
         });
-        blank = async () => entryDef.blankPath;
         const dates = selected.map((r) => r.startDate.getTime()).sort();
         earliestMs = dates[0];
         latestMs = dates[dates.length - 1];
@@ -841,7 +836,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     let bytes;
     try {
-      bytes = await fillFormPages(await blank(), pages);
+      bytes = await fillFormPages(entryDef.blankPath, pages);
     } catch (err) {
       console.error(`fillForm failed for ${form_id}:`, err);
       return res.status(500).json({ message: "Form fill failed", code: "internal_error" });

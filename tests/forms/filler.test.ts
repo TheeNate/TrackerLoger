@@ -21,11 +21,6 @@ describe("fillForm", () => {
     expect(form.getTextField("job_number").getText()).toBe("12345");
   });
 
-  it("accepts blank bytes as well as a path", async () => {
-    const out = await fillForm(await fs.readFile(CW_BLANK), { name: "From Bytes" });
-    const reopened = await PDFDocument.load(out);
-    expect(reopened.getForm().getTextField("name").getText()).toBe("From Bytes");
-  });
 
   it("sets /NeedAppearances=true on the AcroForm dict", async () => {
     const out = await fillForm(CW_BLANK, { name: "x" });
@@ -40,6 +35,12 @@ describe("fillForm", () => {
   });
 });
 
+const LENDT_BLANK = path.resolve(
+  __dirname, "..", "..", "server", "forms", "blanks", "LeNDT_OJT_Fillable.pdf",
+);
+const LENDT_SCHEMA = path.resolve(
+  __dirname, "..", "..", "server", "forms", "schemas", "lendt_ojt_v1.schema.json",
+);
 const CW_SCHEMA = path.resolve(
   __dirname, "..", "..", "server", "forms", "schemas", "curtiss_wright_wer_v1.schema.json",
 );
@@ -56,6 +57,12 @@ async function fieldNamesInSchema(schemaPath: string): Promise<string[]> {
 }
 
 describe("blank ↔ schema field-name parity", () => {
+  it("Lê NDT blank matches its schema", async () => {
+    const inBlank = await fieldNamesInBlank(LENDT_BLANK);
+    const inSchema = await fieldNamesInSchema(LENDT_SCHEMA);
+    expect(inBlank).toEqual(inSchema);
+  });
+
   it("Curtiss-Wright blank matches its schema", async () => {
     const inBlank = await fieldNamesInBlank(CW_BLANK);
     const inSchema = await fieldNamesInSchema(CW_SCHEMA);

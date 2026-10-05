@@ -609,16 +609,12 @@ function buildServer(userId: number): McpServer {
 
       let pages: Record<string, string>[];
       let earliestMs: number, latestMs: number;
-      // Fixed blank on disk, unless the form draws its blank from the selection.
-      let blank: () => Promise<string | Uint8Array>;
       try {
         if (entryDef.kind === "ojt") {
           const all = await storage.getEntries(userId);
           const selected = all.filter((e) => requested.has(e.id));
           if (selected.length !== requested.size) return err("one or more entryIds not found or not yours");
           pages = entryDef.adapter({ entries: selected, profile, headerOverrides });
-          blank = async () =>
-            "buildBlank" in entryDef ? entryDef.buildBlank(selected) : entryDef.blankPath;
           const dates = selected.map((e) => e.date.getTime()).sort();
           earliestMs = dates[0];
           latestMs = dates[dates.length - 1];
@@ -628,7 +624,6 @@ function buildServer(userId: number): McpServer {
           if (selected.length !== requested.size) return err("one or more entryIds not found or not yours");
           const sups = await storage.getSupervisors(userId);
           pages = entryDef.adapter({ ropeHours: selected, profile, supervisors: sups, headerOverrides });
-          blank = async () => entryDef.blankPath;
           const dates = selected.map((r) => r.startDate.getTime()).sort();
           earliestMs = dates[0];
           latestMs = dates[dates.length - 1];
@@ -642,7 +637,7 @@ function buildServer(userId: number): McpServer {
 
       let bytes: Uint8Array;
       try {
-        bytes = await fillFormPages(await blank(), pages);
+        bytes = await fillFormPages(entryDef.blankPath, pages);
       } catch (e) {
         return err(`form fill failed: ${e instanceof Error ? e.message : "unknown"}`);
       }

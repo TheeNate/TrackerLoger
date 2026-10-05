@@ -1,22 +1,28 @@
+// Generates the Lê NDT Experience Hours (OJT) blank AcroForm and its schema.
+// There is no vendor-supplied PDF for this form, so the blank is drawn here.
+// Re-run after changing the layout or LENDT_COLUMNS, and commit the outputs:
+//
+//   npx tsx scripts/gen-lendt-blank.ts
 import { promises as fs } from "fs";
 import path from "path";
 import {
   PDFDocument, PDFName, PDFString, StandardFonts, rgb,
   type PDFFont, type PDFPage,
 } from "pdf-lib";
-import { LENDT_MAX_ROWS, type LendtColumn } from "./adapters/lendt_ojt_v1";
-import { BLANKS_DIR } from "./paths";
+import { LENDT_COLUMNS, LENDT_MAX_ROWS, type LendtColumn } from "../server/forms/adapters/lendt_ojt_v1";
 
-// The Lê NDT Experience Hours (OJT) form has no vendor-supplied PDF, and its
-// method columns vary per export (only methods with hours are drawn), so the
-// blank AcroForm is drawn here on demand instead of being loaded from blanks/.
+const LOGO_PATH = path.resolve("attached_assets", "lendt", "logo-vt.jpg");
+const BLANK_PATH = path.resolve("server", "forms", "blanks", "LeNDT_OJT_Fillable.pdf");
+const SCHEMA_PATH = path.resolve("server", "forms", "schemas", "lendt_ojt_v1.schema.json");
 
-const LOGO_PATH = path.join(BLANKS_DIR, "LeNDT_logo.jpg");
-
-const COLUMN_HEADS: Record<LendtColumn, string> = {
-  ET: "ET", RFT: "RFT", MT: "MT", PT: "PT", RT: "RT",
-  UT: "UT", UT_THK: "UT Thk", UTSW: "UTSW", PMI: "PMI", LSI: "LSI", PAUT: "PAUT",
-  VT_1: "VT-1", VT_2: "VT-2", VT_3: "VT-3", VWE: "VWE",
+const COLUMN_LABELS: Record<LendtColumn, { head: string; label: string }> = {
+  MT:   { head: "MT",   label: "Magnetic Particle Testing" },
+  PT:   { head: "PT",   label: "Penetrant Testing (Liquid Penetrant)" },
+  UT:   { head: "UT",   label: "Ultrasonic Testing" },
+  VT_1: { head: "VT-1", label: "Visual Testing Level 1" },
+  VT_2: { head: "VT-2", label: "Visual Testing Level 2 (also legacy plain VT rows)" },
+  VT_3: { head: "VT-3", label: "Visual Testing Level 3" },
+  VWE:  { head: "VWE",  label: "Visual Welding Examination" },
 };
 
 // Landscape US Letter.
@@ -25,12 +31,9 @@ const PAGE_H = 612;
 const MARGIN = 28;
 
 const DATE_W = 58;
-// Method columns share the space left after the text columns' minimums, up to
-// a cap; whatever is still free then widens Job Location and Supervisor.
-const METHOD_W_MAX = 56;
-const LOCATION_W_MIN = 130;
-const SUPERVISOR_W_MIN = 110;
-const LOCATION_SHARE = 0.58;
+const LOCATION_W = 210;
+const METHOD_W = 44;
+const SUPERVISOR_W = PAGE_W - 2 * MARGIN - DATE_W - LOCATION_W - METHOD_W * LENDT_COLUMNS.length;
 
 const TABLE_TOP = 472;
 const HEAD_H = 22;
@@ -42,8 +45,7 @@ const SHADE = rgb(0.93, 0.93, 0.93);
 
 type Align = "left" | "center";
 
-/** Draw a blank, fillable Lê NDT form carrying exactly the given method columns. */
-export async function buildLendtBlank(columns: readonly LendtColumn[]): Promise<Uint8Array> {
+async function main() {
   const doc = await PDFDocument.create();
   doc.setTitle("Lê NDT — Experience Hours (OJT)");
   const page = doc.addPage([PAGE_W, PAGE_H]);
@@ -54,6 +56,8 @@ export async function buildLendtBlank(columns: readonly LendtColumn[]): Promise<
   acroForm.dict.set(PDFName.of("DA"), PDFString.of("/Helv 0 Tf 0 g"));
   acroForm.dict.set(PDFName.of("DR"), doc.context.obj({ Font: { Helv: font.ref } }));
   acroForm.dict.set(PDFName.of("NeedAppearances"), doc.context.obj(true));
+
+  const fieldNames: string[] = [];
 
   // Fields are single merged field+widget dicts (no /Kids), the same shape as
   // the vendor blanks — fillFormPages relies on that when it renames fields.
@@ -75,6 +79,7 @@ export async function buildLendtBlank(columns: readonly LendtColumn[]): Promise<
     const ref = doc.context.register(dict);
     page.node.addAnnot(ref);
     acroForm.addField(ref);
+    fieldNames.push(name);
   }
 
   // ---- Letterhead ----
@@ -102,21 +107,13 @@ export async function buildLendtBlank(columns: readonly LendtColumn[]): Promise<
     (x, w) => addField("employee_number", "Employee Number", x, headerY - 4, w, 18, { size: 10 }));
 
   // ---- Table ----
-  const tableW = PAGE_W - 2 * MARGIN;
-  const flexW = tableW - DATE_W;
-  const methodW = columns.length === 0 ? 0 : Math.min(
-    METHOD_W_MAX,
-    (flexW - LOCATION_W_MIN - SUPERVISOR_W_MIN) / columns.length,
-  );
-  const textW = flexW - methodW * columns.length;
-  const locationW = Math.round(textW * LOCATION_SHARE);
-
   const cols: { key: string; head: string; w: number; align: Align }[] = [
     { key: "date", head: "Job Date", w: DATE_W, align: "center" },
-    { key: "location", head: "Job Location", w: locationW, align: "left" },
-    ...columns.map((c) => ({ key: c as string, head: COLUMN_HEADS[c], w: methodW, align: "center" as Align })),
-    { key: "supervisor", head: "Supervisor Signature", w: textW - locationW, align: "left" },
+    { key: "location", head: "Job Location", w: LOCATION_W, align: "left" },
+    ...LENDT_COLUMNS.map((c) => ({ key: c as string, head: COLUMN_LABELS[c].head, w: METHOD_W, align: "center" as Align })),
+    { key: "supervisor", head: "Supervisor Signature", w: SUPERVISOR_W, align: "left" },
   ];
+  const tableW = cols.reduce((s, c) => s + c.w, 0);
   const totalRows = LENDT_MAX_ROWS + 1; // + totals row
   const tableBottom = TABLE_TOP - HEAD_H - ROW_H * totalRows;
 
@@ -124,13 +121,12 @@ export async function buildLendtBlank(columns: readonly LendtColumn[]): Promise<
   page.drawRectangle({ x: MARGIN, y: TABLE_TOP - HEAD_H, width: tableW, height: HEAD_H, color: SHADE });
   page.drawRectangle({ x: MARGIN, y: tableBottom, width: tableW, height: ROW_H, color: SHADE });
 
-  // Column heads + vertical rules. With every method in play the columns get
-  // narrow, so the heads drop a point to keep clear of the rules.
-  const headSize = methodW > 0 && methodW < 34 ? 7 : 8;
+  // Column heads + vertical rules.
   let x = MARGIN;
   for (const col of cols) {
-    drawText(page, col.head, bold, headSize,
-      x + (col.w - bold.widthOfTextAtSize(col.head, headSize)) / 2, TABLE_TOP - HEAD_H + 7.5);
+    const size = 8;
+    drawText(page, col.head, bold, size,
+      x + (col.w - bold.widthOfTextAtSize(col.head, size)) / 2, TABLE_TOP - HEAD_H + 7.5);
     page.drawLine({ start: { x, y: TABLE_TOP }, end: { x, y: tableBottom }, thickness: 0.6, color: INK });
     x += col.w;
   }
@@ -156,10 +152,10 @@ export async function buildLendtBlank(columns: readonly LendtColumn[]): Promise<
 
   // Totals row.
   drawText(page, "TOTAL HOURS", bold, 8, MARGIN + DATE_W + 6, tableBottom + 6.5);
-  x = MARGIN + DATE_W + locationW;
-  for (const c of columns) {
-    addField(`total_${c}`, `total ${COLUMN_HEADS[c]}`, x, tableBottom, methodW, ROW_H, { align: "center" });
-    x += methodW;
+  x = MARGIN + DATE_W + LOCATION_W;
+  for (const c of LENDT_COLUMNS) {
+    addField(`total_${c}`, `total ${COLUMN_LABELS[c].head}`, x, tableBottom, METHOD_W, ROW_H, { align: "center" });
+    x += METHOD_W;
   }
 
   // ---- Signature ----
@@ -172,7 +168,46 @@ export async function buildLendtBlank(columns: readonly LendtColumn[]): Promise<
   const footer = "Lê NDT & Solutions — Asset Protection Services";
   drawText(page, footer, font, 7, (PAGE_W - font.widthOfTextAtSize(footer, 7)) / 2, 34, rgb(0.45, 0.45, 0.45));
 
-  return doc.save({ updateFieldAppearances: false });
+  await fs.writeFile(BLANK_PATH, await doc.save({ updateFieldAppearances: false }));
+  console.log("Wrote", BLANK_PATH, `(${fieldNames.length} fields)`);
+
+  const schema = {
+    form_id: "lendt_ojt_v1",
+    company: "Lê NDT & Solutions",
+    form_title: "Experience Hours (OJT)",
+    blank_pdf: path.basename(BLANK_PATH),
+    generated_by: "scripts/gen-lendt-blank.ts",
+    page_count: 1,
+    method_codes: [...LENDT_COLUMNS],
+    method_code_labels: Object.fromEntries(LENDT_COLUMNS.map((c) => [c, COLUMN_LABELS[c].label])),
+    max_entry_rows: LENDT_MAX_ROWS,
+    fields: {
+      header: {
+        employee_name: { pdf_field: "employee_name", type: "text", label: "Employee Name (Print)" },
+        employee_number: { pdf_field: "employee_number", type: "text", label: "Employee Number" },
+      },
+      rows_template: {
+        description: `There are ${LENDT_MAX_ROWS} rows. PDF field names follow: row_<N>_<key> where N is 1..${LENDT_MAX_ROWS}.`,
+        keys: {
+          date: { label: "Job Date", format: "M/D/YYYY" },
+          location: { label: "Job Location", format: "free text" },
+          ...Object.fromEntries(LENDT_COLUMNS.map((c) => [c, { label: `${COLUMN_LABELS[c].head} hours`, format: "decimal hours" }])),
+          supervisor: { label: "Supervisor Signature (typed)", format: "free text / initials" },
+        },
+      },
+      totals: {
+        description: "Total Hours row at bottom of table. PDF field names: total_<methodCode>.",
+        fields: Object.fromEntries(LENDT_COLUMNS.map((c) => [`total_${c}`, { pdf_field: `total_${c}`, type: "text" }])),
+      },
+      signature: {
+        employee_signature: { pdf_field: "employee_signature", type: "text", label: "Employee Signature" },
+        signature_date: { pdf_field: "signature_date", type: "text", label: "Signature Date" },
+      },
+    },
+    all_pdf_field_names: fieldNames,
+  };
+  await fs.writeFile(SCHEMA_PATH, JSON.stringify(schema, null, 2) + "\n");
+  console.log("Wrote", SCHEMA_PATH);
 }
 
 function drawText(
@@ -192,3 +227,8 @@ function labelledField(
   page.drawLine({ start: { x: lineX, y: y - 3 }, end: { x: lineX + lineW, y: y - 3 }, thickness: 0.6, color: INK });
   place(lineX, lineW);
 }
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

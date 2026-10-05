@@ -2,23 +2,22 @@
   "form_id": "lendt_ojt_v1",
   "company": "Lê NDT & Solutions",
   "form_title": "Experience Hours (OJT)",
-  "blank_pdf": null,
-  "blank_built_by": "server/forms/lendt_blank.ts (buildLendtBlank)",
+  "blank_pdf": "LeNDT_OJT_Fillable.pdf",
+  "generated_by": "scripts/gen-lendt-blank.ts",
   "page_count": 1,
-  "dynamic_columns": "Only method columns that have hours in the export are drawn, so the field set varies per export. row_<N>_<methodCode> and total_<methodCode> exist only for those columns.",
-  "method_codes": ["ET", "RFT", "MT", "PT", "RT", "UT", "UT_THK", "UTSW", "PMI", "LSI", "PAUT", "VT_1", "VT_2", "VT_3", "VWE"],
+  "method_codes": [
+    "MT",
+    "PT",
+    "UT",
+    "VT_1",
+    "VT_2",
+    "VT_3",
+    "VWE"
+  ],
   "method_code_labels": {
-    "ET": "Eddy Current Testing",
-    "RFT": "Remote Field Testing",
     "MT": "Magnetic Particle Testing",
     "PT": "Penetrant Testing (Liquid Penetrant)",
-    "RT": "Radiographic Testing",
     "UT": "Ultrasonic Testing",
-    "UT_THK": "Ultrasonic Thickness",
-    "UTSW": "Ultrasonic Shear Wave",
-    "PMI": "Positive Material Identification",
-    "LSI": "LSI",
-    "PAUT": "Phased Array Ultrasonic Testing",
     "VT_1": "Visual Testing Level 1",
     "VT_2": "Visual Testing Level 2 (also legacy plain VT rows)",
     "VT_3": "Visual Testing Level 3",
@@ -27,24 +26,279 @@
   "max_entry_rows": 16,
   "fields": {
     "header": {
-      "employee_name": { "pdf_field": "employee_name", "type": "text", "label": "Employee Name (Print)" },
-      "employee_number": { "pdf_field": "employee_number", "type": "text", "label": "Employee Number" }
+      "employee_name": {
+        "pdf_field": "employee_name",
+        "type": "text",
+        "label": "Employee Name (Print)"
+      },
+      "employee_number": {
+        "pdf_field": "employee_number",
+        "type": "text",
+        "label": "Employee Number"
+      }
     },
     "rows_template": {
       "description": "There are 16 rows. PDF field names follow: row_<N>_<key> where N is 1..16.",
       "keys": {
-        "date": { "label": "Job Date", "format": "M/D/YYYY" },
-        "location": { "label": "Job Location", "format": "free text" },
-        "<methodCode>": { "label": "hours for that method (only for columns present)", "format": "decimal hours" },
-        "supervisor": { "label": "Supervisor Signature (typed)", "format": "free text / initials" }
+        "date": {
+          "label": "Job Date",
+          "format": "M/D/YYYY"
+        },
+        "location": {
+          "label": "Job Location",
+          "format": "free text"
+        },
+        "MT": {
+          "label": "MT hours",
+          "format": "decimal hours"
+        },
+        "PT": {
+          "label": "PT hours",
+          "format": "decimal hours"
+        },
+        "UT": {
+          "label": "UT hours",
+          "format": "decimal hours"
+        },
+        "VT_1": {
+          "label": "VT-1 hours",
+          "format": "decimal hours"
+        },
+        "VT_2": {
+          "label": "VT-2 hours",
+          "format": "decimal hours"
+        },
+        "VT_3": {
+          "label": "VT-3 hours",
+          "format": "decimal hours"
+        },
+        "VWE": {
+          "label": "VWE hours",
+          "format": "decimal hours"
+        },
+        "supervisor": {
+          "label": "Supervisor Signature (typed)",
+          "format": "free text / initials"
+        }
       }
     },
     "totals": {
-      "description": "Total Hours row at bottom of table. PDF field names: total_<methodCode>, only for columns present."
+      "description": "Total Hours row at bottom of table. PDF field names: total_<methodCode>.",
+      "fields": {
+        "total_MT": {
+          "pdf_field": "total_MT",
+          "type": "text"
+        },
+        "total_PT": {
+          "pdf_field": "total_PT",
+          "type": "text"
+        },
+        "total_UT": {
+          "pdf_field": "total_UT",
+          "type": "text"
+        },
+        "total_VT_1": {
+          "pdf_field": "total_VT_1",
+          "type": "text"
+        },
+        "total_VT_2": {
+          "pdf_field": "total_VT_2",
+          "type": "text"
+        },
+        "total_VT_3": {
+          "pdf_field": "total_VT_3",
+          "type": "text"
+        },
+        "total_VWE": {
+          "pdf_field": "total_VWE",
+          "type": "text"
+        }
+      }
     },
     "signature": {
-      "employee_signature": { "pdf_field": "employee_signature", "type": "text", "label": "Employee Signature" },
-      "signature_date": { "pdf_field": "signature_date", "type": "text", "label": "Signature Date" }
+      "employee_signature": {
+        "pdf_field": "employee_signature",
+        "type": "text",
+        "label": "Employee Signature"
+      },
+      "signature_date": {
+        "pdf_field": "signature_date",
+        "type": "text",
+        "label": "Signature Date"
+      }
     }
-  }
+  },
+  "all_pdf_field_names": [
+    "employee_name",
+    "employee_number",
+    "row_1_date",
+    "row_1_location",
+    "row_1_MT",
+    "row_1_PT",
+    "row_1_UT",
+    "row_1_VT_1",
+    "row_1_VT_2",
+    "row_1_VT_3",
+    "row_1_VWE",
+    "row_1_supervisor",
+    "row_2_date",
+    "row_2_location",
+    "row_2_MT",
+    "row_2_PT",
+    "row_2_UT",
+    "row_2_VT_1",
+    "row_2_VT_2",
+    "row_2_VT_3",
+    "row_2_VWE",
+    "row_2_supervisor",
+    "row_3_date",
+    "row_3_location",
+    "row_3_MT",
+    "row_3_PT",
+    "row_3_UT",
+    "row_3_VT_1",
+    "row_3_VT_2",
+    "row_3_VT_3",
+    "row_3_VWE",
+    "row_3_supervisor",
+    "row_4_date",
+    "row_4_location",
+    "row_4_MT",
+    "row_4_PT",
+    "row_4_UT",
+    "row_4_VT_1",
+    "row_4_VT_2",
+    "row_4_VT_3",
+    "row_4_VWE",
+    "row_4_supervisor",
+    "row_5_date",
+    "row_5_location",
+    "row_5_MT",
+    "row_5_PT",
+    "row_5_UT",
+    "row_5_VT_1",
+    "row_5_VT_2",
+    "row_5_VT_3",
+    "row_5_VWE",
+    "row_5_supervisor",
+    "row_6_date",
+    "row_6_location",
+    "row_6_MT",
+    "row_6_PT",
+    "row_6_UT",
+    "row_6_VT_1",
+    "row_6_VT_2",
+    "row_6_VT_3",
+    "row_6_VWE",
+    "row_6_supervisor",
+    "row_7_date",
+    "row_7_location",
+    "row_7_MT",
+    "row_7_PT",
+    "row_7_UT",
+    "row_7_VT_1",
+    "row_7_VT_2",
+    "row_7_VT_3",
+    "row_7_VWE",
+    "row_7_supervisor",
+    "row_8_date",
+    "row_8_location",
+    "row_8_MT",
+    "row_8_PT",
+    "row_8_UT",
+    "row_8_VT_1",
+    "row_8_VT_2",
+    "row_8_VT_3",
+    "row_8_VWE",
+    "row_8_supervisor",
+    "row_9_date",
+    "row_9_location",
+    "row_9_MT",
+    "row_9_PT",
+    "row_9_UT",
+    "row_9_VT_1",
+    "row_9_VT_2",
+    "row_9_VT_3",
+    "row_9_VWE",
+    "row_9_supervisor",
+    "row_10_date",
+    "row_10_location",
+    "row_10_MT",
+    "row_10_PT",
+    "row_10_UT",
+    "row_10_VT_1",
+    "row_10_VT_2",
+    "row_10_VT_3",
+    "row_10_VWE",
+    "row_10_supervisor",
+    "row_11_date",
+    "row_11_location",
+    "row_11_MT",
+    "row_11_PT",
+    "row_11_UT",
+    "row_11_VT_1",
+    "row_11_VT_2",
+    "row_11_VT_3",
+    "row_11_VWE",
+    "row_11_supervisor",
+    "row_12_date",
+    "row_12_location",
+    "row_12_MT",
+    "row_12_PT",
+    "row_12_UT",
+    "row_12_VT_1",
+    "row_12_VT_2",
+    "row_12_VT_3",
+    "row_12_VWE",
+    "row_12_supervisor",
+    "row_13_date",
+    "row_13_location",
+    "row_13_MT",
+    "row_13_PT",
+    "row_13_UT",
+    "row_13_VT_1",
+    "row_13_VT_2",
+    "row_13_VT_3",
+    "row_13_VWE",
+    "row_13_supervisor",
+    "row_14_date",
+    "row_14_location",
+    "row_14_MT",
+    "row_14_PT",
+    "row_14_UT",
+    "row_14_VT_1",
+    "row_14_VT_2",
+    "row_14_VT_3",
+    "row_14_VWE",
+    "row_14_supervisor",
+    "row_15_date",
+    "row_15_location",
+    "row_15_MT",
+    "row_15_PT",
+    "row_15_UT",
+    "row_15_VT_1",
+    "row_15_VT_2",
+    "row_15_VT_3",
+    "row_15_VWE",
+    "row_15_supervisor",
+    "row_16_date",
+    "row_16_location",
+    "row_16_MT",
+    "row_16_PT",
+    "row_16_UT",
+    "row_16_VT_1",
+    "row_16_VT_2",
+    "row_16_VT_3",
+    "row_16_VWE",
+    "row_16_supervisor",
+    "total_MT",
+    "total_PT",
+    "total_UT",
+    "total_VT_1",
+    "total_VT_2",
+    "total_VT_3",
+    "total_VWE",
+    "employee_signature",
+    "signature_date"
+  ]
 }
