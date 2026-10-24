@@ -11,4 +11,7 @@ export default defineConfig({
   dbCredentials: {
     url: process.env.DATABASE_URL,
   },
+  // `session` is owned by connect-pg-simple, not shared/schema.ts. Without this
+  // filter `drizzle-kit push` drops it and logs every user out.
+  tablesFilter: ["!session"],
 });

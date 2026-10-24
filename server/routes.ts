@@ -187,7 +187,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     allowedOrigins.push('https://127.0.0.1:5000');
     
     // Check if origin is in allowlist
-    const isAllowedOrigin = allowedOrigins.includes(origin) || 
+    // A page served by this host posting back to it isn't cross-origin at all
+    // (e.g. a phone hitting the dev box by its tailnet name).
+    let sameHost = false;
+    try {
+      sameHost = !!origin && new URL(origin).host === host;
+    } catch {
+      /* malformed Origin header */
+    }
+
+    const isAllowedOrigin = sameHost || allowedOrigins.includes(origin) ||
                            (process.env.NODE_ENV === 'development' && origin.startsWith('http://localhost:'));
 
     if (isAllowedOrigin) {
