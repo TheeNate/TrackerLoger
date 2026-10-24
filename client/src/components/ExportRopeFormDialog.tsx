@@ -1,13 +1,11 @@
 import { useState } from "react";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogDescription,
   DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useToast } from "@/hooks/use-toast";
+import { ExportFormFooter, FormPicker, useFormPdfExport } from "@/components/ExportFormParts";
 import type { RopeHours } from "@shared/schema";
 
 type FormId = "sprat_log_v1" | "irata_log_v1";
@@ -33,62 +31,27 @@ interface ExportRopeFormDialogProps {
 export function ExportRopeFormDialog({
   open, onOpenChange, selectedRopeHours,
 }: ExportRopeFormDialogProps) {
-  const { toast } = useToast();
   const [formId, setFormId] = useState<FormId>("sprat_log_v1");
   const [runningTotal, setRunningTotal] = useState("");
   const [totalHoursSinceCert, setTotalHoursSinceCert] = useState("");
   const [runningTotalHours, setRunningTotalHours] = useState("");
-  const [downloading, setDownloading] = useState(false);
+  const { busy, shareable, run } = useFormPdfExport("Rope access hours", () => onOpenChange(false));
 
   const pageCount = Math.ceil(selectedRopeHours.length / ROWS_PER_PAGE[formId]);
 
-  async function handleDownload() {
-    setDownloading(true);
-    try {
-      const header_overrides: Record<string, string> = {};
-      if (formId === "sprat_log_v1") {
-        if (runningTotal) header_overrides.running_total = runningTotal;
-        if (totalHoursSinceCert) header_overrides.total_hours_since_cert = totalHoursSinceCert;
-      } else {
-        if (runningTotalHours) header_overrides.running_total_hours = runningTotalHours;
-      }
-
-      const res = await fetch("/api/export-form", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          form_id: formId,
-          entry_ids: selectedRopeHours.map((r) => r.id),
-          header_overrides,
-        }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        toast({
-          title: "Export failed",
-          description: (body as { message?: string }).message ?? `HTTP ${res.status}`,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const dispo = res.headers.get("Content-Disposition") ?? "";
-      const match = dispo.match(/filename="([^"]+)"/);
-      a.download = match?.[1] ?? `${formId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      onOpenChange(false);
-    } finally {
-      setDownloading(false);
+  function exportPdf(mode: "download" | "share") {
+    const header_overrides: Record<string, string> = {};
+    if (formId === "sprat_log_v1") {
+      if (runningTotal) header_overrides.running_total = runningTotal;
+      if (totalHoursSinceCert) header_overrides.total_hours_since_cert = totalHoursSinceCert;
+    } else {
+      if (runningTotalHours) header_overrides.running_total_hours = runningTotalHours;
     }
+    run(mode, {
+      form_id: formId,
+      entry_ids: selectedRopeHours.map((r) => r.id),
+      header_overrides,
+    });
   }
 
   return (
@@ -104,18 +67,16 @@ export function ExportRopeFormDialog({
         <div className="space-y-4 py-2">
           <div>
             <Label className="text-sm font-medium">Form</Label>
-            <RadioGroup
-              value={formId}
-              onValueChange={(v) => setFormId(v as FormId)}
-              className="mt-2"
-            >
-              {(["sprat_log_v1", "irata_log_v1"] as FormId[]).map((id) => (
-                <div key={id} className="flex items-center space-x-2">
-                  <RadioGroupItem value={id} id={id} />
-                  <Label htmlFor={id} className="font-normal">{FORM_LABELS[id]}</Label>
-                </div>
-              ))}
-            </RadioGroup>
+            <div className="mt-2">
+              <FormPicker
+                value={formId}
+                onChange={setFormId}
+                options={(["sprat_log_v1", "irata_log_v1"] as FormId[]).map((id) => ({
+                  id,
+                  label: FORM_LABELS[id],
+                }))}
+              />
+            </div>
           </div>
 
           {pageCount > 1 && (
@@ -144,14 +105,14 @@ export function ExportRopeFormDialog({
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={downloading}>
-            Cancel
-          </Button>
-          <Button onClick={handleDownload} disabled={downloading || selectedRopeHours.length === 0}>
-            {downloading ? "Generating…" : "Download"}
-          </Button>
-        </DialogFooter>
+        <ExportFormFooter
+          busy={busy}
+          shareable={shareable}
+          disabled={selectedRopeHours.length === 0}
+          onCancel={() => onOpenChange(false)}
+          onDownload={() => exportPdf("download")}
+          onShare={() => exportPdf("share")}
+        />
       </DialogContent>
     </Dialog>
   );

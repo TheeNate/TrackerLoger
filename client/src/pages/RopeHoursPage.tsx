@@ -10,9 +10,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
-import { Calendar, Clock, MapPin, Cable, User, Pencil, Upload, FileText, Trash2, CloudOff, AlertTriangle, RefreshCw, ChevronDown, ChevronRight } from "lucide-react";
+import { Calendar, Clock, MapPin, Cable, User, Pencil, Upload, FileText, Trash2, CloudOff, AlertTriangle, RefreshCw, ChevronDown, ChevronRight, CheckCircle2, MoreVertical, Send, X, FileSpreadsheet } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { formatCalendarDate } from "@shared/dates";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { RopeHours } from "@shared/schema";
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { EditRopeHourDialog } from "@/components/EditRopeHourDialog";
@@ -60,6 +67,10 @@ export default function RopeHoursPage() {
   // Rope Hours History is collapsed by default — the list can get long. The
   // Total Verified Hours card above always stays visible.
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Mobile: checkboxes only appear in select mode (for Export to form), and
+  // deletes confirm through one page-level dialog opened from the ⋮ menu.
+  const [selectMode, setSelectMode] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<RopeHours | null>(null);
 
   const toggleSelected = (id: number) => {
     setSelectedRopeHourIds((prev) => {
@@ -247,6 +258,7 @@ export default function RopeHoursPage() {
       await apiRequest("POST", `/api/verify-request-rope/${ropeHourId}`, {
         supervisorId,
       });
+      queryClient.invalidateQueries({ queryKey: ["/api/rope-hours"] });
 
       toast({
         title: "Success",
@@ -410,6 +422,201 @@ export default function RopeHoursPage() {
     </form>
   );
 
+  const renderMobileRopeCard = (entry: RopeHours) => {
+    const isImported = !!entry.importedAt;
+    const e = entry as RopeHours & { _pendingSync?: boolean; _syncFailed?: string | null };
+    const pending = isPendingSync(e);
+    const failed = getSyncFailure(e);
+    const requested = !!entry.verificationRequestedAt;
+    const canEdit = !isImported && (pending || !!failed || (!entry.verified && !requested));
+    const selected = selectedRopeHourIds.has(entry.id);
+    const tone = failed
+      ? "border-red-200 bg-red-50/60 dark:border-red-900 dark:bg-red-950/30"
+      : pending
+      ? "border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/30"
+      : entry.verified
+      ? "border-green-200 bg-green-50/60 dark:border-green-900 dark:bg-green-950/30"
+      : selected
+      ? "border-primary bg-primary/5"
+      : "border-border bg-card";
+
+    const status = failed ? (
+      <span className="inline-flex items-center gap-1.5 text-sm text-red-700 dark:text-red-400" title={failed}>
+        <AlertTriangle className="h-4 w-4" /> Sync failed
+      </span>
+    ) : pending ? (
+      <span className="inline-flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-400">
+        <CloudOff className="h-4 w-4" /> Waiting to sync
+      </span>
+    ) : isImported ? (
+      <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+        <FileText className="h-4 w-4" /> Imported from signed log
+      </span>
+    ) : entry.verified ? (
+      <button
+        type="button"
+        onClick={() => setProofEntry(entry)}
+        className="inline-flex min-w-0 items-center gap-1.5 text-left text-sm text-green-700 dark:text-green-400"
+      >
+        <CheckCircle2 className="h-4 w-4 shrink-0" />
+        <span className="truncate">Verified by {entry.verifiedBy}</span>
+      </button>
+    ) : requested ? (
+      <span className="inline-flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-400">
+        <Clock className="h-4 w-4" /> Awaiting signature
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Clock className="h-4 w-4" /> Not yet verified
+      </span>
+    );
+
+    return (
+      <div
+        key={entry.id}
+        className={`rounded-xl border p-4 shadow-sm transition-colors ${tone}`}
+        onClick={selectMode ? () => toggleSelected(entry.id) : undefined}
+      >
+        <div className="flex items-start gap-3">
+          {selectMode && (
+            <Checkbox
+              checked={selected}
+              onCheckedChange={() => toggleSelected(entry.id)}
+              onClick={(ev) => ev.stopPropagation()}
+              className="mt-1 h-5 w-5"
+              aria-label="Select entry"
+            />
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="text-base font-semibold text-foreground">
+              {formatCalendarDate(entry.startDate, { month: "short", day: "numeric" })} –{" "}
+              {formatCalendarDate(entry.endDate, "medium")}
+            </div>
+            <div className="mt-0.5 flex items-center gap-1 text-sm text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{entry.location}</span>
+            </div>
+          </div>
+          <div className="shrink-0 text-2xl font-bold leading-none tabular-nums text-foreground">
+            {entry.hours.toFixed(1)}
+            <span className="ml-0.5 text-sm font-medium text-muted-foreground">h</span>
+          </div>
+        </div>
+
+        {entry.skills && (
+          <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{entry.skills}</p>
+        )}
+
+        <div className="mt-3 flex items-center gap-2">
+          <div className="min-w-0 flex-1">{status}</div>
+          {isImported && !selectMode && (
+            <SourceDocumentLink recordType="rope" recordId={entry.id} />
+          )}
+          {!selectMode && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" aria-label="Entry actions">
+                  <MoreVertical className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {failed && (
+                  <DropdownMenuItem className="py-3" disabled={!online} onSelect={() => handleRetryRope(entry)}>
+                    <RefreshCw className="mr-2 h-4 w-4" /> Retry sync
+                  </DropdownMenuItem>
+                )}
+                {canEdit && (
+                  <DropdownMenuItem className="py-3" onSelect={() => setEditingRopeHour(entry)}>
+                    <Pencil className="mr-2 h-4 w-4" /> Edit
+                  </DropdownMenuItem>
+                )}
+                {entry.verified && (
+                  <DropdownMenuItem className="py-3" onSelect={() => setProofEntry(entry)}>
+                    <CheckCircle2 className="mr-2 h-4 w-4" /> View verification
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  className="py-3 text-red-600 focus:text-red-700 dark:text-red-400"
+                  onSelect={() => (failed ? handleDiscardRope(entry) : setDeleteTarget(entry))}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  {failed ? "Discard" : isImported ? "Remove" : "Delete"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+
+        {!selectMode && !isImported && !entry.verified && !pending && !failed && (
+          supervisors.length > 0 ? (
+            <Select
+              disabled={!online}
+              onValueChange={(value) => handleVerifyRequest(entry.id, parseInt(value))}
+            >
+              <SelectTrigger
+                className={`mt-3 h-11 w-full justify-center gap-2 text-base ${
+                  requested ? "data-[placeholder]:text-foreground" : "border-primary/40 data-[placeholder]:text-primary"
+                }`}
+              >
+                <Send className="h-4 w-4" />
+                <SelectValue
+                  placeholder={
+                    !online
+                      ? "Verification needs internet"
+                      : requested
+                      ? "Resend verification request"
+                      : "Request verification"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {supervisors.map((supervisor: any) => (
+                  <SelectItem key={supervisor.id} value={supervisor.id.toString()} className="py-3">
+                    {supervisor.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3 h-11 w-full text-base"
+              onClick={() => {
+                toast({
+                  title: "Add a signer first",
+                  description: "Add a supervisor on the Signers page, then request verification.",
+                });
+                navigate("/signers");
+              }}
+            >
+              <Send className="mr-2 h-4 w-4" /> Request verification
+            </Button>
+          )
+        )}
+      </div>
+    );
+  };
+
+  const openImport = () => {
+    if (!online) {
+      toast({
+        title: "Requires internet",
+        description: "Importing a signed log uses AI and storage that needs a connection.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsImportDialogOpen(true);
+  };
+
+  // Export on phones: pick entries (verified ones preselected), then open the
+  // SPRAT / IRATA dialog from the bar above the tab bar.
+  const startExportSelect = () => {
+    setSelectedRopeHourIds(new Set(ropeHours.filter((r) => r.verified).map((r) => r.id)));
+    setSelectMode(true);
+  };
+
   if (isLoadingUser) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -424,8 +631,120 @@ export default function RopeHoursPage() {
 
   return (
     <div className="min-h-screen bg-neutral-100">
-      <ProfileHeader user={user} verifiedEntries={[]} />
-      
+      <ProfileHeader user={user} verifiedEntries={[]} onExport={startExportSelect} />
+
+      {isMobile ? (
+        <main className="px-4 pt-4 pb-mobile-nav space-y-4">
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Verified rope hours
+                </div>
+                <div className="text-4xl font-bold tabular-nums text-green-600 dark:text-green-400">
+                  {calculateTotalHours().toFixed(1)}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Logged
+                </div>
+                <div className="text-2xl font-semibold tabular-nums text-foreground">
+                  {ropeHours.reduce((t, r) => t + r.hours, 0).toFixed(1)}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <MobileLogDrawer
+                buttonLabel="Log Rope Hours"
+                title="Log New Rope Hours"
+                description="Record your rope access training hours with date range and skills used"
+                icon={<Cable className="h-5 w-5" />}
+              >
+                {(close) => renderRopeForm(close)}
+              </MobileLogDrawer>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={openImport}
+              disabled={!online}
+              className="h-16 w-[4.25rem] shrink-0 px-0 flex-col gap-1 rounded-xl text-xs"
+              aria-label="Import from signed log"
+            >
+              <Upload className="h-5 w-5" />
+              Import
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={startExportSelect}
+              disabled={!online || ropeHours.length === 0}
+              className="h-16 w-[4.25rem] shrink-0 px-0 flex-col gap-1 rounded-xl text-xs"
+              aria-label="Export to form"
+            >
+              <FileSpreadsheet className="h-5 w-5" />
+              Export
+            </Button>
+          </div>
+
+          <section>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-foreground">
+                History{" "}
+                <span className="text-sm font-normal text-muted-foreground">({ropeHours.length})</span>
+              </h2>
+              {ropeHours.length > 0 &&
+                (selectMode ? (
+                  <Button
+                    variant="ghost"
+                    className="h-10"
+                    onClick={() => {
+                      setSelectMode(false);
+                      setSelectedRopeHourIds(new Set());
+                    }}
+                  >
+                    <X className="mr-1 h-4 w-4" /> Cancel
+                  </Button>
+                ) : (
+                  <Button variant="ghost" className="h-10 text-primary" onClick={startExportSelect}>
+                    Export to form
+                  </Button>
+                ))}
+            </div>
+            {isLoading ? (
+              <div className="py-8 text-center text-muted-foreground">Loading rope hours...</div>
+            ) : ropeHours.length === 0 ? (
+              <div className="rounded-xl border-2 border-dashed border-border p-8 text-center text-muted-foreground">
+                <Cable className="mx-auto mb-2 h-8 w-8 opacity-50" />
+                No rope hours yet. Tap <span className="font-medium">Log Rope Hours</span> to add your first session.
+              </div>
+            ) : (
+              <div className="space-y-3">{ropeHours.map(renderMobileRopeCard)}</div>
+            )}
+          </section>
+
+          <ImportedLogGroups records={ropeHours} recordType="rope" />
+
+          {selectMode && (
+            <div className="fixed inset-x-0 z-20 border-t border-border bg-card/95 p-3 backdrop-blur bottom-[calc(4rem+env(safe-area-inset-bottom))]">
+              <Button
+                className="h-12 w-full text-base"
+                disabled={selectedRopeHourIds.size === 0}
+                onClick={() => setExportOpen(true)}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                {selectedRopeHourIds.size === 0
+                  ? "Tap entries to select"
+                  : `Export ${selectedRopeHourIds.size} to SPRAT / IRATA form`}
+              </Button>
+            </div>
+          )}
+        </main>
+      ) : (
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
           <div className="flex items-center gap-2">
@@ -802,6 +1121,32 @@ export default function RopeHoursPage() {
         )}
       </Card>
       </main>
+      )}
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this entry?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.verified ? "This entry has already been verified. " : ""}
+              This will permanently delete the rope-hours entry
+              {deleteTarget
+                ? ` from ${formatCalendarDate(deleteTarget.startDate, "medium")} – ${formatCalendarDate(deleteTarget.endDate, "medium")} at ${deleteTarget.location}`
+                : ""}
+              . This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel className="h-11">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="h-11 bg-red-600 hover:bg-red-700"
+              onClick={() => deleteTarget && handleDeleteRopeHour(deleteTarget.id)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ImportLogDialog
         open={isImportDialogOpen}

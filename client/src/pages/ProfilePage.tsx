@@ -13,11 +13,14 @@ import { ApiTokensCard } from "@/components/ApiTokensCard";
 import { CertificationsCard } from "@/components/CertificationsCard";
 import { ShareProfileCard } from "@/components/ShareProfileCard";
 import { Button } from "@/components/ui/button";
-import { Upload, ClipboardList } from "lucide-react";
+import { Upload, ClipboardList, FileSpreadsheet } from "lucide-react";
 import { Entry, User } from "@shared/schema";
 import { useOnlineStatus } from "@/lib/offline/online";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileLogDrawer } from "@/components/MobileLogDrawer";
+import { MobileOjtLog, OjtHoursSummary } from "@/components/MobileOjtLog";
+import { ImportedLogGroups } from "@/components/ImportedLogGroups";
+import { ExportFormDialog } from "@/components/ExportFormDialog";
 
 export default function ProfilePage() {
   const { toast } = useToast();
@@ -28,6 +31,7 @@ export default function ProfilePage() {
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const online = useOnlineStatus();
   const isMobile = useIsMobile();
   const handleOpenImport = () => {
@@ -98,8 +102,88 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-neutral-100">
-      <ProfileHeader user={user} verifiedEntries={verifiedEntries} />
+      <ProfileHeader
+        user={user}
+        verifiedEntries={verifiedEntries}
+        onExport={() => setIsExportOpen(true)}
+      />
 
+      {isMobile ? (
+        <main className="px-4 pt-4 pb-mobile-nav space-y-4">
+          <OjtHoursSummary entries={entries} />
+
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <MobileLogDrawer
+                buttonLabel="Log OJT Hours"
+                title="Log OJT Hours"
+                description="Record a training session — date, location, method and hours."
+                icon={<ClipboardList className="h-5 w-5" />}
+              >
+                {(close) => <NewEntryForm mobile onDone={close} />}
+              </MobileLogDrawer>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleOpenImport}
+              disabled={!online}
+              className="h-16 w-[4.25rem] shrink-0 flex-col gap-1 rounded-xl px-0 text-xs"
+              aria-label="Import from signed log"
+            >
+              <Upload className="h-5 w-5" />
+              Import
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsExportOpen(true)}
+              disabled={!online || entries.length === 0}
+              className="h-16 w-[4.25rem] shrink-0 flex-col gap-1 rounded-xl px-0 text-xs"
+              aria-label="Export hours"
+            >
+              <FileSpreadsheet className="h-5 w-5" />
+              Export
+            </Button>
+          </div>
+
+          <MobileOjtLog
+            entries={entries}
+            onVerifyRequest={handleVerifyRequest}
+            selectedEntryIds={selectedEntryIds}
+            onToggleSelect={handleToggleSelect}
+            onClearSelection={() => setSelectedEntryIds(new Set())}
+            onBatchVerifyRequest={() => setIsBatchModalOpen(true)}
+            onEditEntry={setEditingEntry}
+          />
+
+          <ImportedLogGroups records={entries} recordType="entry" />
+
+          <CertificationsCard />
+
+          <ShareProfileCard />
+
+          <ApiTokensCard />
+
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm text-sm">
+            <p className="text-muted-foreground">
+              The above is true and accurate to the best of my knowledge.
+            </p>
+            <div className="mt-3 flex justify-between gap-4">
+              <div className="min-w-0">
+                <span className="block text-xs text-muted-foreground">Digital signature</span>
+                <span className="block truncate font-medium text-foreground">
+                  {user.name || user.email}
+                </span>
+              </div>
+              <div className="shrink-0 text-right">
+                <span className="block text-xs text-muted-foreground">Date</span>
+                <span className="font-medium text-foreground">{dateString}</span>
+              </div>
+            </div>
+          </div>
+        </main>
+      ) : (
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-end mb-4">
           <Button
@@ -162,6 +246,7 @@ export default function ProfilePage() {
           </div>
         </div>
       </main>
+      )}
 
       <SupervisorVerifyModal
         isOpen={isVerifyModalOpen}
@@ -187,6 +272,15 @@ export default function ProfilePage() {
         open={!!editingEntry}
         onClose={() => setEditingEntry(null)}
       />
+
+      {isMobile && (
+        <ExportFormDialog
+          open={isExportOpen}
+          onOpenChange={setIsExportOpen}
+          selectedEntries={entries}
+          offerVerifiedOnly
+        />
+      )}
 
       <ImportLogDialog
         open={isImportDialogOpen}

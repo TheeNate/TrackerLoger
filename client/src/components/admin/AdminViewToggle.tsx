@@ -19,7 +19,7 @@ export function AdminViewToggle() {
       <button
         type="button"
         onClick={() => setLocation("/profile")}
-        className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-medium transition-colors ${
+        className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded px-2.5 py-1 font-medium transition-colors ${
           !onAdmin
             ? "bg-white text-neutral-900 shadow-sm"
             : "text-neutral-500 hover:text-neutral-700"
@@ -31,7 +31,7 @@ export function AdminViewToggle() {
       <button
         type="button"
         onClick={() => setLocation("/admin")}
-        className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-medium transition-colors ${
+        className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded px-2.5 py-1 font-medium transition-colors ${
           onAdmin
             ? "bg-white text-neutral-900 shadow-sm"
             : "text-neutral-500 hover:text-neutral-700"

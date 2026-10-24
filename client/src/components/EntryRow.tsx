@@ -33,7 +33,7 @@ import {
   discardFailedEntry,
 } from "@/lib/offline/mutations";
 
-function DeleteEntryButton({
+export function DeleteEntryButton({
   entry,
   isPending,
   onConfirm,
@@ -83,21 +83,12 @@ function DeleteEntryButton({
   );
 }
 
-interface EntryRowProps {
-  entry: Entry;
-  onVerifyRequest: (entry: Entry) => void;
-  isSelected?: boolean;
-  onToggleSelect?: (id: number) => void;
-  onEdit?: (entry: Entry) => void;
-}
-
-export function EntryRow({
-  entry,
-  onVerifyRequest,
-  isSelected,
-  onToggleSelect,
-  onEdit,
-}: EntryRowProps) {
+// Shared behavior for an OJT entry, used by the desktop table row (EntryRow)
+// and the mobile card (EntryCard) so both stay in lockstep.
+export function useEntryActions(
+  entry: Entry,
+  onVerifyRequest: (entry: Entry) => void,
+) {
   const isImported = !!entry.importedAt;
   const { toast } = useToast();
   const online = useOnlineStatus();
@@ -107,7 +98,6 @@ export function EntryRow({
   };
   const pendingSync = isPendingSync(e);
   const syncFailed = getSyncFailure(e);
-  const [proofOpen, setProofOpen] = useState(false);
 
   const deleteMutation = useMutation<unknown, Error, number>({
     mutationKey: ["entries.delete"],
@@ -173,6 +163,47 @@ export function EntryRow({
       description: "The failed entry has been removed.",
     });
   };
+
+  return {
+    isImported,
+    online,
+    pendingSync,
+    syncFailed,
+    deleteMutation,
+    handleDelete,
+    handleVerifyClick,
+    handleRetry,
+    handleDiscard,
+  };
+}
+
+interface EntryRowProps {
+  entry: Entry;
+  onVerifyRequest: (entry: Entry) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (id: number) => void;
+  onEdit?: (entry: Entry) => void;
+}
+
+export function EntryRow({
+  entry,
+  onVerifyRequest,
+  isSelected,
+  onToggleSelect,
+  onEdit,
+}: EntryRowProps) {
+  const {
+    isImported,
+    online,
+    pendingSync,
+    syncFailed,
+    deleteMutation,
+    handleDelete,
+    handleVerifyClick,
+    handleRetry,
+    handleDiscard,
+  } = useEntryActions(entry, onVerifyRequest);
+  const [proofOpen, setProofOpen] = useState(false);
 
   const formatDate = (date: Date | string) =>
     new Date(date).toLocaleDateString();

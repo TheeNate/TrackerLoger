@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, real, boolean, uuid, json } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, real, boolean, uuid, json, unique } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -41,6 +41,13 @@ export function signerMethodLabel(method: string): string {
   if (method === "UT_THK") return "UT Thk.";
   if (method === "ROPE_ACCESS") return "Rope Access";
   return method;
+}
+
+// Short label for an OJT entry's method (UI display only): "UT_THK" → "UT Thk.",
+// "VT_2" → "VT-2".
+export function ndtMethodLabel(method: string): string {
+  if (/^VT_\d$/.test(method)) return method.replace("_", "-");
+  return signerMethodLabel(method);
 }
 
 // Certification levels a signer can hold
@@ -346,6 +353,50 @@ export const insertRopeHoursSchema = createInsertSchema(ropeHours).pick({
   employer: true,
   workDetails: true,
   maxHeight: true,
+});
+
+// In-app notifications (the bell). One row per recipient; email copies are
+// sent alongside when Resend is configured. `subjectUserId` is the technician
+// the notification is about.
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(), // "cert_eligible"
+  title: text("title").notNull(),
+  body: text("body"),
+  link: text("link"),
+  subjectUserId: integer("subject_user_id").references(() => users.id, { onDelete: "cascade" }),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type Notification = typeof notifications.$inferSelect;
+
+// A technician became eligible for a certification level. Unique per
+// user/track/level so admins are told once, however often progress is checked.
+// `track` is a milestoneTrackKey (shared/certProgress.ts), which includes the
+// organization when the level was measured against that org's requirements.
+export const certMilestones = pgTable(
+  "cert_milestones",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    track: text("track").notNull(),
+    level: integer("level").notNull(),
+    reachedAt: timestamp("reached_at").defaultNow(),
+  },
+  (t) => [unique("cert_milestones_user_track_level").on(t.userId, t.track, t.level)],
+);
+
+export type CertMilestone = typeof certMilestones.$inferSelect;
+
+// Small app-wide settings, e.g. the NDT certification requirements (site
+// default plus per-organization overrides).
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: json("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedBy: integer("updated_by").references(() => users.id, { onDelete: "set null" }),
 });
 
 // API Tokens for external integrations (e.g. Claude MCP)

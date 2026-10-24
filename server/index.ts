@@ -224,6 +224,41 @@ async function runMigrations() {
     await client.query(`
       UPDATE entries SET method = 'VT_2' WHERE method = 'VT';
     `);
+    // Certification progress alerts (shared/certProgress.ts, server/progress.ts)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT,
+        link TEXT,
+        subject_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        read_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications(user_id, created_at DESC);
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cert_milestones (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        track TEXT NOT NULL,
+        level INTEGER NOT NULL,
+        reached_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT cert_milestones_user_track_level UNIQUE (user_id, track, level)
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value JSON NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW(),
+        updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+      );
+    `);
     log("Database migrations applied successfully");
   } catch (err) {
     log(`Migration error: ${err}`);

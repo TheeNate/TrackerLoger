@@ -1,14 +1,13 @@
 import { useMemo, useState } from "react";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogDescription,
   DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useToast } from "@/hooks/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/use-auth";
+import { ExportFormFooter, FormPicker, useFormPdfExport } from "@/components/ExportFormParts";
 import type { Entry } from "@shared/schema";
 
 type FormId = "lendt_ojt_v1" | "curtiss_wright_wer_v1";
@@ -30,19 +29,25 @@ interface ExportFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedEntries: Entry[];
+  /** Offer a "verified entries only" switch (on by default) — used when the
+   *  dialog is handed the whole log instead of a hand-picked selection. */
+  offerVerifiedOnly?: boolean;
 }
 
 export function ExportFormDialog({
-  open, onOpenChange, selectedEntries,
+  open, onOpenChange, selectedEntries: givenEntries, offerVerifiedOnly,
 }: ExportFormDialogProps) {
   const { user } = useAuth();
-  const { toast } = useToast();
+  const [verifiedOnly, setVerifiedOnly] = useState(true);
+  const unverifiedCount = givenEntries.filter((e) => !e.verified).length;
+  const selectedEntries =
+    offerVerifiedOnly && verifiedOnly ? givenEntries.filter((e) => e.verified) : givenEntries;
 
   const [formId, setFormId] = useState<FormId>("lendt_ojt_v1");
   const [employeeName, setEmployeeName] = useState(user?.name ?? "");
   const [employeeNumber, setEmployeeNumber] = useState(user?.employeeNumber ?? "");
   const [jobNumber, setJobNumber] = useState("");
-  const [downloading, setDownloading] = useState(false);
+  const { busy, shareable, run } = useFormPdfExport("OJT hours", () => onOpenChange(false));
 
   const unmappedCount = useMemo(() => {
     const supported = SUPPORTED_METHODS[formId];
@@ -54,55 +59,21 @@ export function ExportFormDialog({
   const lendtPageCount =
     formId === "lendt_ojt_v1" ? Math.ceil(selectedEntries.length / 16) : 1;
 
-  async function handleDownload() {
-    setDownloading(true);
-    try {
-      const header_overrides: Record<string, string> = {};
-      if (formId === "lendt_ojt_v1") {
-        if (employeeName) header_overrides.employee_name = employeeName;
-        if (employeeName) header_overrides.employee_signature = employeeName;
-        if (employeeNumber) header_overrides.employee_number = employeeNumber;
-      } else {
-        if (employeeName) header_overrides.name = employeeName;
-        if (jobNumber) header_overrides.job_number = jobNumber;
-      }
-
-      const res = await fetch("/api/export-form", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          form_id: formId,
-          entry_ids: selectedEntries.map((e) => e.id),
-          header_overrides,
-        }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        toast({
-          title: "Export failed",
-          description: (body as { message?: string }).message ?? `HTTP ${res.status}`,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const dispo = res.headers.get("Content-Disposition") ?? "";
-      const match = dispo.match(/filename="([^"]+)"/);
-      a.download = match?.[1] ?? `${formId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      onOpenChange(false);
-    } finally {
-      setDownloading(false);
+  function exportPdf(mode: "download" | "share") {
+    const header_overrides: Record<string, string> = {};
+    if (formId === "lendt_ojt_v1") {
+      if (employeeName) header_overrides.employee_name = employeeName;
+      if (employeeName) header_overrides.employee_signature = employeeName;
+      if (employeeNumber) header_overrides.employee_number = employeeNumber;
+    } else {
+      if (employeeName) header_overrides.name = employeeName;
+      if (jobNumber) header_overrides.job_number = jobNumber;
     }
+    run(mode, {
+      form_id: formId,
+      entry_ids: selectedEntries.map((e) => e.id),
+      header_overrides,
+    });
   }
 
   return (
@@ -111,29 +82,45 @@ export function ExportFormDialog({
         <DialogHeader>
           <DialogTitle>Export to vendor form</DialogTitle>
           <DialogDescription>
-            {selectedEntries.length} entr{selectedEntries.length === 1 ? "y" : "ies"} selected.
+            {selectedEntries.length} entr{selectedEntries.length === 1 ? "y" : "ies"}{" "}
+            {offerVerifiedOnly ? "to export" : "selected"}.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {offerVerifiedOnly && unverifiedCount > 0 && (
+            <label className="flex items-center gap-3 rounded-lg border border-border p-3 text-sm">
+              <Checkbox
+                checked={verifiedOnly}
+                onCheckedChange={(v) => setVerifiedOnly(v === true)}
+                className="h-5 w-5"
+              />
+              <span>
+                Verified entries only
+                <span className="block text-xs text-muted-foreground">
+                  {unverifiedCount} unverified {unverifiedCount === 1 ? "entry" : "entries"}{" "}
+                  {verifiedOnly ? "left out" : "included"}
+                </span>
+              </span>
+            </label>
+          )}
+
           <div>
             <Label className="text-sm font-medium">Form</Label>
-            <RadioGroup
-              value={formId}
-              onValueChange={(v) => setFormId(v as FormId)}
-              className="mt-2"
-            >
-              {(["lendt_ojt_v1", "curtiss_wright_wer_v1"] as FormId[]).map((id) => (
-                <div key={id} className="flex items-center space-x-2">
-                  <RadioGroupItem value={id} id={id} />
-                  <Label htmlFor={id} className="font-normal">{FORM_LABELS[id]}</Label>
-                </div>
-              ))}
-            </RadioGroup>
+            <div className="mt-2">
+              <FormPicker
+                value={formId}
+                onChange={setFormId}
+                options={(["lendt_ojt_v1", "curtiss_wright_wer_v1"] as FormId[]).map((id) => ({
+                  id,
+                  label: FORM_LABELS[id],
+                }))}
+              />
+            </div>
           </div>
 
           {unmappedCount > 0 && (
-            <p className="text-sm text-amber-700 bg-amber-50 p-2 rounded">
+            <p className="text-sm text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/40 p-2 rounded">
               {unmappedCount} of your selected entries use methods this form
               doesn&apos;t support and will be skipped.
             </p>
@@ -178,14 +165,14 @@ export function ExportFormDialog({
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={downloading}>
-            Cancel
-          </Button>
-          <Button onClick={handleDownload} disabled={downloading || selectedEntries.length === 0}>
-            {downloading ? "Generating…" : "Download"}
-          </Button>
-        </DialogFooter>
+        <ExportFormFooter
+          busy={busy}
+          shareable={shareable}
+          disabled={selectedEntries.length === 0}
+          onCancel={() => onOpenChange(false)}
+          onDownload={() => exportPdf("download")}
+          onShare={() => exportPdf("share")}
+        />
       </DialogContent>
     </Dialog>
   );

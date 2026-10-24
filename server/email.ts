@@ -289,3 +289,34 @@ export async function sendVerificationConfirmation(
     html
   );
 }
+
+const escapeHtml = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+
+// Tell an admin a technician now meets the requirements for a certification
+// level. `requirements` are pre-formatted lines like "OJT hours: 104 / 100 h".
+// `link` is the app path to open (site admins: /admin, org admins: /organizations).
+export async function sendCertEligibleEmail(
+  to: string,
+  opts: { technician: string; certification: string; requirements: string[]; link: string },
+): Promise<boolean> {
+  const url = `${getBaseUrl()}${opts.link}`;
+  const html = `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>${escapeHtml(opts.technician)} qualifies for ${escapeHtml(opts.certification)}</h2>
+      <p>Their verified log now meets every requirement:</p>
+      <div style="background-color: #f4f4f4; padding: 15px; border-radius: 4px; margin: 20px 0;">
+        ${opts.requirements.map((r) => `<p style="margin: 4px 0;">✓ ${escapeHtml(r)}</p>`).join("")}
+      </div>
+      <p>
+        <a href="${url}" style="background-color: #2563eb; color: #fff; padding: 10px 16px; border-radius: 4px; text-decoration: none;">
+          Open certification progress
+        </a>
+      </p>
+      <p style="color: #666; font-size: 13px;">
+        You're getting this because you're an admin on OJT Hours Tracker.
+      </p>
+    </div>
+  `;
+  return await sendEmail(to, `${opts.technician} qualifies for ${opts.certification}`, html);
+}
