@@ -1,3 +1,5 @@
+import type { TrackProgress } from "@shared/certProgress";
+import { TrackProgressRow } from "./TrackProgressRow";
 import { ReactNode, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -144,6 +146,10 @@ export function UserDetailPanel({
   const { data: certs = [] } = useQuery<Certification[]>({
     queryKey: [`/api/admin/users/${userId}/certifications`],
   });
+  const { data: progress = [] } = useQuery<TrackProgress[]>({
+    queryKey: [`/api/admin/users/${userId}/progress`],
+  });
+  const trackedProgress = progress.filter((p) => !p.blocked && (p.nextLevel !== null || p.currentLevel > 0));
 
   const invalidateUser = () => {
     queryClient.invalidateQueries({ queryKey: [`/api/admin/users/${userId}`] });
@@ -217,6 +223,9 @@ export function UserDetailPanel({
       queryClient.invalidateQueries({
         queryKey: [`/api/admin/users/${userId}/certifications`],
       });
+      // Certificates set the starting level for progress.
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/users/${userId}/progress`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/progress"] });
       invalidateUser();
       toast({ title: "Certification removed" });
     },
@@ -345,6 +354,22 @@ export function UserDetailPanel({
           Delete
         </Button>
       </div>
+
+      {/* Certification progress (shared/certProgress.ts) */}
+      <Section title="Certification progress" count={trackedProgress.length} defaultOpen>
+        {trackedProgress.length === 0 ? (
+          <p className="text-sm text-neutral-500">
+            Nothing to track yet. Verified OJT hours count toward the NDT requirements; add their SPRAT / IRATA
+            certificate (with level and issue date) to track rope hours toward the next level.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {trackedProgress.map((p) => (
+              <TrackProgressRow key={`${p.track}-${p.scope?.orgId ?? 0}`} p={p} />
+            ))}
+          </div>
+        )}
+      </Section>
 
       {/* Certifications */}
       <Section
@@ -702,6 +727,9 @@ function AdminCertDialog({
       queryClient.invalidateQueries({
         queryKey: [`/api/admin/users/${userId}/certifications`],
       });
+      // Certificates set the starting level for progress.
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/users/${userId}/progress`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/progress"] });
       queryClient.invalidateQueries({ queryKey: [`/api/admin/users/${userId}`] });
       toast({ title: "Certification added" });
       reset();

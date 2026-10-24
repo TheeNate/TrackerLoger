@@ -12,6 +12,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { storage } from "../storage";
+import { queueProgressCheck } from "../progress";
 import { db } from "../db";
 import {
   entries as entriesTable,
@@ -318,6 +319,7 @@ function buildServer(userId: number): McpServer {
       if (rest.method !== undefined) updates.method = rest.method;
       if (rest.hours !== undefined) updates.hours = rest.hours;
       const updated = await storage.updateEntry(id, updates as never);
+      queueProgressCheck(userId);
       return ok(`Updated entry ${id}.`, { entry: updated });
     },
   );
@@ -412,6 +414,7 @@ function buildServer(userId: number): McpServer {
       if (rest.startDate) updates.startDate = new Date(rest.startDate);
       if (rest.endDate) updates.endDate = new Date(rest.endDate);
       const updated = await storage.updateRopeHour(id, updates as never);
+      queueProgressCheck(userId);
       return ok(`Updated rope-hour ${id}.`, { ropeHour: updated });
     },
   );
@@ -673,6 +676,7 @@ function buildServer(userId: number): McpServer {
       try {
         const rec = await buildCertRecord(userId, input);
         const created = await storage.createCertification(rec);
+        queueProgressCheck(userId);
         return ok(
           `Added certification "${created.name}" (id ${created.id})${created.documentKey ? " with file" : ""}.`,
           { certification: created },
@@ -692,6 +696,7 @@ function buildServer(userId: number): McpServer {
       if (!existing) return err("certification not found");
       if (existing.userId !== userId) return err("certification does not belong to you");
       await storage.deleteCertification(id);
+      queueProgressCheck(existing.userId);
       return ok(`Deleted certification ${id}.`);
     },
   );
@@ -832,6 +837,7 @@ function buildServer(userId: number): McpServer {
       try {
         const rec = await buildCertRecord(targetId, input);
         const created = await storage.createCertification(rec);
+        queueProgressCheck(targetId);
         return ok(
           `Added "${created.name}" to ${target.email} (cert id ${created.id}).`,
           { certification: created },
@@ -851,6 +857,7 @@ function buildServer(userId: number): McpServer {
       const existing = await storage.getCertification(id);
       if (!existing) return err("certification not found");
       await storage.deleteCertification(id);
+      queueProgressCheck(existing.userId);
       return ok(`Deleted certification ${id}.`);
     },
   );

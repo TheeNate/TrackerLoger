@@ -69,6 +69,15 @@ Most use is on a phone in the field. Under 768px (`useIsMobile`) pages swap to a
 
 Import `queryClient` only as `@/lib/queryClient` — a relative import from `main.tsx` loaded a second module instance in dev and every save failed with "No mutationFn found". `drizzle.config.ts` filters out connect-pg-simple's `session` table so `drizzle-kit push` doesn't drop it.
 
+### Certification progress & admin alerts (`shared/certProgress.ts`, `server/progress.ts`)
+
+Admin → **Progress** tab: top 10 technicians closest to their next certification level (filter chips for the busiest tracks, the rest under "More") and a "Who's logging" roster. **Requirements** tab edits the site-default NDT numbers. Org admins get the same Progress / Requirements tabs inside their org on the Organizations page. The bell (`NotificationBell`, admin header + `ProfileHeader`) lists alerts; it shows for site admins always and for org admins once they've had one.
+- Tracks: **SPRAT** (L2: 500 h + 6 mo at L1; L3: 1,000 h + 6 mo at L2; all career hours) and **IRATA** (each level: 1,000 h since the current cert's issue date + 12 mo) are fixed in code and need a starting cert on file. **NDT**: one track per `NDTMethods` method, metric = verified `entries.hours` for that method, starting from Level I with no cert. Levels (I–III), hours and months-at-previous-level per method are editable; a method with no levels isn't tracked.
+- Requirements live in `app_settings`: `ndt_ojt_requirements` (site default, seeded with placeholders, not anyone's written practice) and `ndt_ojt_requirements:org:<id>` (an org's own). A technician is measured against each active org's own requirements, or the default for orgs that haven't set any (or if they're in no org). `DELETE /api/organizations/:id/cert-requirements` puts an org back on the default.
+- Current level = highest matching cert: rope by issuing body/name; NDT by `method` (or a word in `name`) normalized like "UT Thk." = "UT_THK", "VT-2" = "VT_2", plain "VT" covers VT-1/2/3, never a SPRAT/IRATA cert.
+- Only **verified** records count; unverified amounts show as "unsigned".
+- Alerts: `checkProgress` records a `cert_milestones` row (unique user / track key / level; the key includes `@org:<id>` for org requirements, so each fires once per scope) and notifies site admins plus the relevant org admins in-app and by email (`sendCertEligibleEmail`, no-op without Resend). It runs after verifications (single/rope/batch), entry/rope edits, import commits, cert create/update/delete (web and MCP; `queueProgressCheck`, fire-and-forget), after saving requirements, and on a 6-hour sweep (`startProgressSweep`, skipped under Vitest). The first deploy alerts for everyone who already qualifies.
+
 ## Environment variables
 
 - `DATABASE_URL` — **required** (Neon Postgres connection string).

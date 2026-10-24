@@ -5,7 +5,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProfileHeader } from "@/components/ProfileHeader";
-import { Building2, UserPlus, Check, X, LogOut, Search, ChevronDown, ChevronRight } from "lucide-react";
+import { Building2, UserPlus, Check, X, LogOut, Search, ChevronDown, ChevronRight, Users, Trophy, SlidersHorizontal } from "lucide-react";
+import { ProgressBoard } from "@/components/admin/ProgressBoard";
+import { CertRequirementsEditor } from "@/components/admin/CertRequirementsEditor";
 import type { User, Entry, Organization } from "@shared/schema";
 import type { UserOrgMembership, OrgMemberEntry } from "@/types";
 
@@ -178,7 +180,7 @@ export default function OrganizationsPage() {
                         {isAdmin && (
                           <button
                             onClick={() => setExpanded(isOpen ? null : organization.id)}
-                            aria-label="Toggle members"
+                            aria-label="Toggle organization admin"
                             className="-m-2 p-2 text-neutral-500"
                           >
                             {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -204,7 +206,7 @@ export default function OrganizationsPage() {
                         {membership.status === "pending" ? "Cancel" : "Leave"}
                       </Button>
                     </div>
-                    {isAdmin && isOpen && <MembersPanel orgId={organization.id} myUserId={user.id} />}
+                    {isAdmin && isOpen && <OrgAdminPanel orgId={organization.id} myUserId={user.id} />}
                   </div>
                 );
               })}
@@ -212,6 +214,49 @@ export default function OrganizationsPage() {
           )}
         </div>
       </main>
+    </div>
+  );
+}
+
+type OrgTab = "members" | "progress" | "requirements";
+const ORG_TABS: { id: OrgTab; label: string; icon: typeof Users }[] = [
+  { id: "members", label: "Members", icon: Users },
+  { id: "progress", label: "Progress", icon: Trophy },
+  { id: "requirements", label: "Requirements", icon: SlidersHorizontal },
+];
+
+// What an org admin manages: members, their certification progress, and the
+// org's own NDT OJT requirements (shared/certProgress.ts).
+function OrgAdminPanel({ orgId, myUserId }: { orgId: number; myUserId: number }) {
+  const [tab, setTab] = useState<OrgTab>("members");
+  return (
+    <div className="border-t border-neutral-200">
+      <nav className="grid grid-cols-3 border-b border-neutral-200 md:flex md:gap-6 md:px-4">
+        {ORG_TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            aria-current={tab === id ? "page" : undefined}
+            className={`flex h-11 items-center justify-center gap-1.5 border-b-2 px-1 text-sm font-medium ${
+              tab === id ? "border-primary text-primary" : "border-transparent text-neutral-500"
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
+      </nav>
+      {tab === "members" && <MembersPanel orgId={orgId} myUserId={myUserId} />}
+      {tab !== "members" && (
+        <div className="bg-neutral-50 p-3 md:p-4 dark:bg-transparent">
+          {tab === "progress" ? (
+            <ProgressBoard endpoint={`/api/organizations/${orgId}/progress`} />
+          ) : (
+            <CertRequirementsEditor orgId={orgId} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -248,14 +293,14 @@ function MembersPanel({ orgId, myUserId }: { orgId: number; myUserId: number }) 
   };
 
   if (isLoading) {
-    return <div className="px-4 py-3 text-sm text-neutral-500 border-t border-neutral-200">Loading members…</div>;
+    return <div className="px-4 py-3 text-sm text-neutral-500">Loading members…</div>;
   }
   const members = data?.members ?? [];
   const pending = members.filter((m) => m.membership.status === "pending");
   const active = members.filter((m) => m.membership.status === "active");
 
   return (
-    <div className="border-t border-neutral-200 px-4 py-3 space-y-4">
+    <div className="px-4 py-3 space-y-4">
       {pending.length > 0 && (
         <div>
           <p className="text-xs font-semibold uppercase text-amber-700 mb-2">Pending requests</p>

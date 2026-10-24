@@ -58,6 +58,19 @@ import {
   touchAccessToken as touchOauthAccessToken,
 } from "./oauth/store";
 import { createHash } from "crypto";
+import {
+  buildProgressBoard,
+  checkProgress,
+  clearOrgRequirements,
+  getRequirements,
+  listNotifications,
+  markNotificationsRead,
+  queueProgressCheck,
+  saveRequirements,
+  startProgressSweep,
+  userProgress,
+} from "./progress";
+import { ndtRequirementsSchema } from "@shared/certProgress";
 
 // Extend express-session types
 declare module "express-session" {
@@ -116,6 +129,15 @@ async function userCanEditSupervisor(
     if (m && m.status === "active" && m.role === "admin") return true;
   }
   return false;
+}
+
+// Org admins (and site admins) can see an org's certification progress and
+// set its NDT requirements.
+async function canManageOrgProgress(orgId: number, userId: number): Promise<boolean> {
+  const m = await storage.getMembership(orgId, userId);
+  if (m && m.status === "active" && m.role === "admin") return true;
+  const user = await storage.getUser(userId);
+  return !!user?.isAdmin;
 }
 
 // In server/routes.ts, replace the session configuration with this:
@@ -696,6 +718,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsedData = updateSchema.parse(body);
 
       const updated = await storage.updateEntry(id, parsedData);
+      queueProgressCheck(userId);
       res.json(updated);
     } catch (error) {
       console.error(error);
@@ -1048,6 +1071,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ---- Org certification progress (server/progress.ts) ----
+
+  app.get("/api/organizations/:id/progress", requireAuth, async (req, res) => {
+    try {
+      const orgId = parseInt(req.params.id, 10);
+      if (!(await canManageOrgProgress(orgId, req.session.userId!))) {
+        return res.status(403).json({ message: "Only an organization admin can view progress" });
+      }
+      res.json(await buildProgressBoard({ orgId }));
+    } catch (error) {
+      console.error("Org progress board error:", error);
+      res.status(500).json({ message: "Error building progress board" });
+    }
+  });
+
+  app.get("/api/organizations/:id/cert-requirements", requireAuth, async (req, res) => {
+    try {
+      const orgId = parseInt(req.params.id, 10);
+      if (!(await canManageOrgProgress(orgId, req.session.userId!))) {
+        return res.status(403).json({ message: "Only an organization admin can view requirements" });
+      }
+      res.json(await getRequirements(orgId));
+    } catch (error) {
+      console.error("Org cert requirements error:", error);
+      res.status(500).json({ message: "Error loading requirements" });
+    }
+  });
+
+  // Save the org's own NDT requirements, then re-check everyone (lowering a
+  // number can make people eligible straight away).
+  app.put("/api/organizations/:id/cert-requirements", requireAuth, async (req, res) => {
+    try {
+      const orgId = parseInt(req.params.id, 10);
+      if (!(await canManageOrgProgress(orgId, req.session.userId!))) {
+        return res.status(403).json({ message: "Only an organization admin can set requirements" });
+      }
+      const value = ndtRequirementsSchema.parse(req.body);
+      const requirements = await saveRequirements(orgId, value, req.session.userId!);
+      const fired = await checkProgress();
+      res.json({ requirements, custom: true, newlyEligible: fired.length });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid requirements", errors: error.errors });
+      }
+      console.error("Save org cert requirements error:", error);
+      res.status(500).json({ message: "Error saving requirements" });
+    }
+  });
+
+  // Go back to the site default requirements.
+  app.delete("/api/organizations/:id/cert-requirements", requireAuth, async (req, res) => {
+    try {
+      const orgId = parseInt(req.params.id, 10);
+      if (!(await canManageOrgProgress(orgId, req.session.userId!))) {
+        return res.status(403).json({ message: "Only an organization admin can set requirements" });
+      }
+      await clearOrgRequirements(orgId);
+      const fired = await checkProgress();
+      res.json({ ...(await getRequirements(orgId)), newlyEligible: fired.length });
+    } catch (error) {
+      console.error("Reset org cert requirements error:", error);
+      res.status(500).json({ message: "Error resetting requirements" });
+    }
+  });
+
+  // The bell: certification alerts for site admins and org admins.
+  app.get("/api/notifications", requireAuth, async (req, res) => {
+    try {
+      res.json(await listNotifications(req.session.userId!));
+    } catch (error) {
+      console.error("Notifications error:", error);
+      res.status(500).json({ message: "Error loading notifications" });
+    }
+  });
+
+  app.post("/api/notifications/read", requireAuth, async (req, res) => {
+    try {
+      const { id } = z.object({ id: z.number().int().optional() }).parse(req.body ?? {});
+      await markNotificationsRead(req.session.userId!, id);
+      res.json({ ok: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ message: "Invalid request" });
+      console.error("Mark notifications read error:", error);
+      res.status(500).json({ message: "Error updating notifications" });
+    }
+  });
+
   app.post("/api/organizations/members/:memberId/approve", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId!;
@@ -1170,6 +1280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsedData = updateSchema.parse(body);
 
       const updated = await storage.updateRopeHour(id, parsedData);
+      queueProgressCheck(userId);
       res.json(updated);
     } catch (error) {
       console.error(error);
@@ -1604,6 +1715,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: entry.verifiedByEmail ?? undefined,
         });
 
+        queueProgressCheck(entry.userId);
+
         // Send confirmation email to user
         const user = await storage.getUser(entry.userId);
         if (user) {
@@ -1629,6 +1742,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...evidence,
           email: ropeHour.verifiedByEmail ?? undefined,
         });
+
+        queueProgressCheck(ropeHour.userId);
 
         // Send confirmation email to user
         const user = await storage.getUser(ropeHour.userId);
@@ -1773,6 +1888,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: entry.verifiedByEmail ?? undefined,
         }))
       );
+
+      queueProgressCheck(batchEntries[0].userId);
 
       // Send one confirmation email to the technician
       const user = await storage.getUser(batchEntries[0].userId);
@@ -2127,6 +2244,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!target) return res.status(404).json({ message: "User not found" });
       const data = certificationWriteSchema.parse(req.body);
       const created = await storage.createCertification({ ...data, userId: id });
+      queueProgressCheck(id);
       res.status(201).json(created);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -2146,6 +2264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existing) return res.status(404).json({ message: "Certification not found" });
       const updates = certificationWriteSchema.partial().parse(req.body);
       res.json(await storage.updateCertification(id, updates));
+      queueProgressCheck(existing.userId);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res
@@ -2163,10 +2282,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const existing = await storage.getCertification(id);
       if (!existing) return res.status(404).json({ message: "Certification not found" });
       await storage.deleteCertification(id);
+      queueProgressCheck(existing.userId);
       res.json({ message: "Certification deleted" });
     } catch (error) {
       console.error("Admin delete cert error:", error);
       res.status(500).json({ message: "Error deleting certification" });
+    }
+  });
+
+  // ---- Certification progress (server/progress.ts) ----
+
+  // Leaderboard of everyone working toward a next level, plus who's logging.
+  app.get("/api/admin/progress", requireAdmin, async (_req, res) => {
+    try {
+      res.json(await buildProgressBoard());
+    } catch (error) {
+      console.error("Progress board error:", error);
+      res.status(500).json({ message: "Error building progress board" });
+    }
+  });
+
+  app.get("/api/admin/users/:id/progress", requireAdmin, async (req, res) => {
+    try {
+      res.json(await userProgress(parseInt(req.params.id, 10)));
+    } catch (error) {
+      console.error("User progress error:", error);
+      res.status(500).json({ message: "Error loading progress" });
+    }
+  });
+
+  // Site-wide default NDT requirements (orgs can override on their page).
+  app.get("/api/admin/cert-requirements", requireAdmin, async (_req, res) => {
+    try {
+      res.json(await getRequirements(null));
+    } catch (error) {
+      console.error("Cert requirements error:", error);
+      res.status(500).json({ message: "Error loading requirements" });
+    }
+  });
+
+  app.put("/api/admin/cert-requirements", requireAdmin, async (req, res) => {
+    try {
+      const value = ndtRequirementsSchema.parse(req.body);
+      const requirements = await saveRequirements(null, value, req.session.userId!);
+      const fired = await checkProgress();
+      res.json({ requirements, custom: true, newlyEligible: fired.length });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid requirements", errors: error.errors });
+      }
+      console.error("Save cert requirements error:", error);
+      res.status(500).json({ message: "Error saving requirements" });
     }
   });
 
@@ -2503,6 +2669,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           body.sourceDocumentKey,
           body.sourceDocumentName,
         );
+        queueProgressCheck(userId);
         return res.status(201).json({ created });
       } else {
         const validated = body.rows.map((raw) => ropeCommitRowSchema.parse(raw));
@@ -2526,6 +2693,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           body.sourceDocumentKey,
           body.sourceDocumentName,
         );
+        queueProgressCheck(userId);
         return res.status(201).json({ created });
       }
     } catch (error) {
@@ -2660,6 +2828,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...data,
         userId: req.session.userId!,
       });
+      queueProgressCheck(req.session.userId);
       res.status(201).json(created);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -2684,6 +2853,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const updates = certificationWriteSchema.partial().parse(req.body);
       const updated = await storage.updateCertification(id, updates);
+      queueProgressCheck(userId);
       res.json(updated);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -2707,6 +2877,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existing.userId !== userId) return res.status(403).json({ message: "Unauthorized" });
 
       await storage.deleteCertification(id);
+      queueProgressCheck(existing.userId);
       res.json({ message: "Certification deleted" });
     } catch (error) {
       console.error("Delete certification error:", error);
@@ -3185,6 +3356,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Call setup admin function
   await setupAdmin();
+
+  startProgressSweep();
 
   const httpServer = createServer(app);
 

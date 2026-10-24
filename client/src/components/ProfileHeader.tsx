@@ -33,6 +33,7 @@ import { generatePdf } from "@/lib/pdf";
 import { ConnectivityChip } from "@/components/ConnectivityChip";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AdminViewToggle } from "@/components/admin/AdminViewToggle";
+import { NotificationBell } from "@/components/admin/NotificationBell";
 import { useOnlineStatus } from "@/lib/offline/online";
 
 interface ProfileHeaderProps {
@@ -155,77 +156,80 @@ export function ProfileHeader({ user, verifiedEntries, onExport }: ProfileHeader
               <ConnectivityChip />
             </div>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
-                  aria-label="Account menu"
-                >
-                  {initials}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel className="font-normal">
-                  <div className="font-semibold text-foreground">
-                    {user.name || "New User"}
-                  </div>
-                  <div className="text-xs text-muted-foreground truncate">{user.email}</div>
-                  {user.employeeNumber && (
-                    <div className="text-xs text-muted-foreground">
-                      Employee #: {user.employeeNumber}
+            <div className="flex shrink-0 items-center gap-1">
+              <NotificationBell />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
+                    aria-label="Account menu"
+                  >
+                    {initials}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="font-semibold text-foreground">
+                      {user.name || "New User"}
                     </div>
+                    <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+                    {user.employeeNumber && (
+                      <div className="text-xs text-muted-foreground">
+                        Employee #: {user.employeeNumber}
+                      </div>
+                    )}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {onExport && (
+                    <DropdownMenuItem className="py-3" disabled={!online} onSelect={onExport}>
+                      <FileDown className="mr-2 h-4 w-4" />
+                      Export hours…
+                    </DropdownMenuItem>
                   )}
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {onExport && (
-                  <DropdownMenuItem className="py-3" disabled={!online} onSelect={onExport}>
-                    <FileDown className="mr-2 h-4 w-4" />
-                    Export hours…
+                  <DropdownMenuItem
+                    className="py-3"
+                    disabled={isExporting || verifiedEntries.length === 0 || !online}
+                    onSelect={handleExportPdf}
+                  >
+                    <FileSpreadsheet className="mr-2 h-4 w-4" />
+                    {isExporting ? "Exporting..." : "Verified hours summary (PDF)"}
                   </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  className="py-3"
-                  disabled={isExporting || verifiedEntries.length === 0 || !online}
-                  onSelect={handleExportPdf}
-                >
-                  <FileSpreadsheet className="mr-2 h-4 w-4" />
-                  {isExporting ? "Exporting..." : "Verified hours summary (PDF)"}
-                </DropdownMenuItem>
-                {user.isAdmin && (
-                  <DropdownMenuItem className="py-3" onSelect={handleAdminClick}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    Admin
+                  {user.isAdmin && (
+                    <DropdownMenuItem className="py-3" onSelect={handleAdminClick}>
+                      <Settings className="mr-2 h-4 w-4" />
+                      Admin
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                    Theme
+                  </DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={theme}
+                    onValueChange={(v) => setTheme(v as typeof theme)}
+                  >
+                    <DropdownMenuRadioItem value="light" className="py-2.5">
+                      <Sun className="mr-2 h-4 w-4" /> Light
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="dark" className="py-2.5">
+                      <Moon className="mr-2 h-4 w-4" /> Dark
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="system" className="py-2.5">
+                      <Monitor className="mr-2 h-4 w-4" /> System
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="py-3 text-primary focus:text-primary"
+                    onSelect={handleLogout}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Log out
                   </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                  Theme
-                </DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={theme}
-                  onValueChange={(v) => setTheme(v as typeof theme)}
-                >
-                  <DropdownMenuRadioItem value="light" className="py-2.5">
-                    <Sun className="mr-2 h-4 w-4" /> Light
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="dark" className="py-2.5">
-                    <Moon className="mr-2 h-4 w-4" /> Dark
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="system" className="py-2.5">
-                    <Monitor className="mr-2 h-4 w-4" /> System
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="py-3 text-primary focus:text-primary"
-                  onSelect={handleLogout}
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Log out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </header>
 
@@ -267,6 +271,7 @@ export function ProfileHeader({ user, verifiedEntries, onExport }: ProfileHeader
           </div>
 
           <div className="flex items-center space-x-3">
+            <NotificationBell />
             <AdminViewToggle />
             <span className="text-sm text-muted-foreground hidden sm:inline">
               {user.email}
