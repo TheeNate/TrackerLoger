@@ -63,6 +63,12 @@ Object storage (used for uploaded import documents under `imports/<userId>/<uuid
 
 TanStack Query state is persisted to IndexedDB and a service worker is registered (`vite-plugin-pwa`). Mutations made offline are queued in an outbox and replayed on reconnect (`resumePausedMutations`). Bump the persist `buster` in `App.tsx` if cached query shapes change incompatibly.
 
+### Mobile UI
+
+Most use is on a phone in the field. Under 768px (`useIsMobile`) pages swap to a separate mobile JSX tree rather than squeezing the desktop one: `ProfileHeader` becomes a compact top bar (avatar menu holds export, summary PDF, admin, theme, logout) plus a fixed bottom tab bar (OJT, Rope, Signers, Orgs — one `navItems` list drives both navs); the OJT page renders `OjtHoursSummary` + `MobileOjtLog`/`EntryCard` instead of `OJTTable`; Rope Hours, Signers and Organizations render cards. Rules: no horizontal scrolling at 360px, the primary action is a full-width button, secondary actions go in a ⋮ menu, tap targets ≥ 40px, page `<main>` uses `pb-mobile-nav` so the tab bar doesn't cover content. `EntryRow` and `EntryCard` share behavior through `useEntryActions` — change it there. Dialogs are capped to the viewport globally in `ui/dialog.tsx` / `ui/alert-dialog.tsx`. Export dialogs share `ExportFormParts.tsx` (Download PDF / Share hours via Web Share, which needs https or localhost). Calendar dates (stored as UTC midnight) should be formatted with `formatCalendarDate` from `shared/dates.ts`.
+
+Import `queryClient` only as `@/lib/queryClient` — a relative import from `main.tsx` loaded a second module instance in dev and every save failed with "No mutationFn found". `drizzle.config.ts` filters out connect-pg-simple's `session` table so `drizzle-kit push` doesn't drop it.
+
 ## Environment variables
 
 - `DATABASE_URL` — **required** (Neon Postgres connection string).

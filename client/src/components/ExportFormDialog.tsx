@@ -120,7 +120,7 @@ export function ExportFormDialog({
           </div>
 
           {unmappedCount > 0 && (
-            <p className="text-sm text-amber-700 bg-amber-50 p-2 rounded">
+            <p className="text-sm text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/40 p-2 rounded">
               {unmappedCount} of your selected entries use methods this form
               doesn&apos;t support and will be skipped.
             </p>

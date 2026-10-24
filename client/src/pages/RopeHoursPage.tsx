@@ -555,7 +555,7 @@ export default function RopeHoursPage() {
             >
               <SelectTrigger
                 className={`mt-3 h-11 w-full justify-center gap-2 text-base ${
-                  requested ? "" : "border-primary/40 text-primary"
+                  requested ? "data-[placeholder]:text-foreground" : "border-primary/40 data-[placeholder]:text-primary"
                 }`}
               >
                 <Send className="h-4 w-4" />
