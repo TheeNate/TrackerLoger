@@ -243,7 +243,7 @@ export function CertificationsCard() {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6 mt-6">
+    <div className="bg-white rounded-xl md:rounded-lg shadow-sm p-4 md:p-6 mt-6">
       <div className="flex items-start justify-between mb-4">
         <div className="min-w-0">
           <button

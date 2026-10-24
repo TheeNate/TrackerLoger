@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { SignerFormFields } from "@/components/SignerFormFields";
-import { Pencil, Trash2, UserPlus, UserCheck } from "lucide-react";
+import { Pencil, Trash2, UserPlus, UserCheck, Phone, Mail } from "lucide-react";
 import { Supervisor, User, Entry, signerMethodLabel } from "@shared/schema";
 import {
   supervisorFormSchema,
@@ -170,9 +170,9 @@ export default function SignersPage() {
     <div className="min-h-screen bg-neutral-100">
       <ProfileHeader user={user} verifiedEntries={verifiedEntries} />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center justify-between mb-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 md:pt-8 pb-mobile-nav">
+        <div className="md:bg-white md:rounded-lg md:shadow-sm md:p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4 md:mb-6">
             <div>
               <h2 className="text-lg font-semibold text-neutral-900 flex items-center gap-2">
                 <UserCheck className="h-5 w-5" />
@@ -182,7 +182,7 @@ export default function SignersPage() {
                 People who can verify your hours. Manage them here so they're ready to select on any entry.
               </p>
             </div>
-            <Button onClick={openAdd} className="flex items-center gap-2">
+            <Button onClick={openAdd} className="flex items-center gap-2 h-12 text-base md:h-10 md:text-sm">
               <UserPlus className="h-4 w-4" />
               Add Signer
             </Button>
@@ -200,7 +200,75 @@ export default function SignersPage() {
               </Button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Phones: one card per signer, tap-to-call / tap-to-email. */}
+            <div className="space-y-3 md:hidden">
+              {signers.map((signer) => {
+                const quals = signerToQualifications(signer);
+                return (
+                  <div key={signer.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-base font-semibold text-foreground">{signer.name}</div>
+                        {signer.organizationId != null && (
+                          <div className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <Users className="h-3 w-3" />
+                            {orgNameById.get(signer.organizationId) ?? "Shared"}
+                            {signer.userId !== user.id ? " · teammate" : ""}
+                          </div>
+                        )}
+                      </div>
+                      {canEditSigner(signer) && (
+                        <div className="flex shrink-0 -mr-2 -mt-2">
+                          <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => openEdit(signer)} aria-label="Edit signer">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-10 w-10 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => setDeleteTarget(signer)}
+                            aria-label="Delete signer"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-2 space-y-1 text-sm">
+                      {signer.phone && (
+                        <a href={`tel:${signer.phone}`} className="flex items-center gap-2 py-1 text-primary">
+                          <Phone className="h-4 w-4" /> {signer.phone}
+                        </a>
+                      )}
+                      <a href={`mailto:${signer.email}`} className="flex items-center gap-2 py-1 text-primary break-all">
+                        <Mail className="h-4 w-4 shrink-0" /> {signer.email}
+                      </a>
+                      {(signer.spratNumber || signer.irataNumber) && (
+                        <div className="text-muted-foreground">
+                          {signer.spratNumber && <>SPRAT #{signer.spratNumber}</>}
+                          {signer.spratNumber && signer.irataNumber && " · "}
+                          {signer.irataNumber && <>IRATA #{signer.irataNumber}</>}
+                        </div>
+                      )}
+                    </div>
+                    {quals.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {quals.map((q, i) => (
+                          <span
+                            key={`${q.method}-${q.level}-${i}`}
+                            className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+                          >
+                            {formatMethod(q.method)} {shortLevel(q.level)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full divide-y divide-neutral-200">
                 <thead>
                   <tr className="text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
@@ -282,6 +350,7 @@ export default function SignersPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
       </main>

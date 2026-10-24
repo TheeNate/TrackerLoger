@@ -112,7 +112,7 @@ export function ShareProfileCard() {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6 mt-6">
+    <div className="bg-white rounded-xl md:rounded-lg shadow-sm p-4 md:p-6 mt-6">
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-neutral-900 flex items-center gap-2">
           <Share2 className="h-5 w-5 text-primary" />
