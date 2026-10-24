@@ -1,6 +1,7 @@
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useOnlineStatus } from "@/lib/offline/online";
 import { nextTempId, type EntryDraft } from "@/lib/offline/mutations";
@@ -23,7 +24,8 @@ import {
 } from "@/components/ui/select";
 import { Plus, X } from "lucide-react";
 import { z } from "zod";
-import { NDTMethods } from "@shared/schema";
+import { NDTMethods, ndtMethodLabel, type Entry } from "@shared/schema";
+import { todayLocalISODate } from "@shared/dates";
 
 const formSchema = z.object({
   entries: z.array(
@@ -38,8 +40,13 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+// Shown first on the phone's method grid until the user's own history ranks
+// their most-used methods; the rest sit behind "More…".
+const COMMON_METHODS = ["MT", "PT", "UT", "UT_THK", "VT_2", "VWE"];
+const QUICK_METHOD_COUNT = 6;
+
 const emptyRow = () => ({
-  date: new Date().toISOString().split("T")[0],
+  date: todayLocalISODate(),
   location: "",
   method: "",
   hours: 0,
@@ -101,6 +108,24 @@ export function NewEntryForm({
     label: key === "UT_THK" ? "UT Thk." : key,
   }));
 
+  // Mobile method grid: the user's most-used methods first.
+  const { data: pastEntries = [] } = useQuery<Entry[]>({
+    queryKey: ["/api/entries"],
+    enabled: mobile,
+  });
+  const [showAllMethods, setShowAllMethods] = useState(false);
+  const quickMethods = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of pastEntries) {
+      if (e.method in NDTMethods) counts.set(e.method, (counts.get(e.method) ?? 0) + 1);
+    }
+    const ranked = Array.from(counts.keys()).sort(
+      (a, b) => counts.get(b)! - counts.get(a)!,
+    );
+    for (const m of COMMON_METHODS) if (!ranked.includes(m)) ranked.push(m);
+    return ranked.slice(0, QUICK_METHOD_COUNT);
+  }, [pastEntries]);
+
   if (mobile) {
     return (
       <Form {...form}>
@@ -140,20 +165,40 @@ export function NewEntryForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-base">NDT Method</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select method" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {methodOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* Big tap targets instead of a dropdown — one tap on a phone. */}
+                <div className="grid grid-cols-3 gap-2" role="radiogroup">
+                  {(showAllMethods
+                    ? Object.keys(NDTMethods)
+                    : quickMethods.includes(field.value) || !field.value
+                    ? quickMethods
+                    : [...quickMethods.slice(0, QUICK_METHOD_COUNT - 1), field.value]
+                  ).map((method) => {
+                    const active = field.value === method;
+                    return (
+                      <button
+                        key={method}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => field.onChange(method)}
+                        className={`h-12 rounded-md border text-base font-medium transition-colors ${
+                          active
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-input bg-background text-foreground"
+                        }`}
+                      >
+                        {ndtMethodLabel(method)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAllMethods((v) => !v)}
+                  className="h-10 w-full rounded-md text-sm font-medium text-primary"
+                >
+                  {showAllMethods ? "Fewer methods" : "More methods…"}
+                </button>
                 <FormMessage />
               </FormItem>
             )}
@@ -172,12 +217,29 @@ export function NewEntryForm({
                     step="0.5"
                     placeholder="0.0"
                     {...field}
+                    value={field.value || ""}
                     onChange={(e) =>
                       field.onChange(parseFloat(e.target.value) || 0)
                     }
                     className="w-full"
                   />
                 </FormControl>
+                <div className="flex gap-2">
+                  {[4, 8, 10, 12].map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => field.onChange(h)}
+                      className={`h-10 flex-1 rounded-md border text-sm font-medium ${
+                        field.value === h
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-input text-muted-foreground"
+                      }`}
+                    >
+                      {h}h
+                    </button>
+                  ))}
+                </div>
                 <FormMessage />
               </FormItem>
             )}

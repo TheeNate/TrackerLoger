@@ -43,6 +43,13 @@ export function signerMethodLabel(method: string): string {
   return method;
 }
 
+// Short label for an OJT entry's method (UI display only): "UT_THK" → "UT Thk.",
+// "VT_2" → "VT-2".
+export function ndtMethodLabel(method: string): string {
+  if (/^VT_\d$/.test(method)) return method.replace("_", "-");
+  return signerMethodLabel(method);
+}
+
 // Certification levels a signer can hold
 export const CERTIFICATION_LEVELS = ["Level I", "Level II", "Level III"] as const;
 
