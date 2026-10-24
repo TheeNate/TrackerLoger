@@ -11,7 +11,24 @@ import {
   Settings,
   UserCheck,
   Building2,
+  LogOut,
+  Sun,
+  Moon,
+  Monitor,
+  FileDown,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useTheme } from "@/hooks/use-theme";
 import { generatePdf } from "@/lib/pdf";
 import { ConnectivityChip } from "@/components/ConnectivityChip";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -21,13 +38,24 @@ import { useOnlineStatus } from "@/lib/offline/online";
 interface ProfileHeaderProps {
   user: Partial<User>;
   verifiedEntries: any[];
+  /** Opens the page's export-forms dialog (shown in the mobile account menu). */
+  onExport?: () => void;
 }
 
-export function ProfileHeader({ user, verifiedEntries }: ProfileHeaderProps) {
+const navItems = [
+  { path: "/profile", label: "OJT Hours", short: "OJT", icon: ClipboardList },
+  { path: "/rope-hours", label: "Rope Hours", short: "Rope", icon: Cable },
+  { path: "/signers", label: "Signers", short: "Signers", icon: UserCheck },
+  { path: "/organizations", label: "Organizations", short: "Orgs", icon: Building2 },
+];
+
+export function ProfileHeader({ user, verifiedEntries, onExport }: ProfileHeaderProps) {
   const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
   const online = useOnlineStatus();
+  const isMobile = useIsMobile();
+  const { theme, setTheme } = useTheme();
 
   const handleLogout = async () => {
     try {
@@ -104,6 +132,129 @@ export function ProfileHeader({ user, verifiedEntries }: ProfileHeaderProps) {
     setLocation("/admin");
   };
 
+  const initials =
+    (user.name || user.email || "?")
+      .split(/[\s@.]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]!.toUpperCase())
+      .join("") || "?";
+
+  if (isMobile) {
+    return (
+      <>
+        <header className="sticky top-0 z-30 bg-card/95 backdrop-blur border-b border-border pt-safe">
+          <div className="h-14 px-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                <ClipboardList className="h-4 w-4" />
+              </span>
+              <span className="truncate text-base font-semibold text-foreground">
+                {navItems.find((n) => n.path === location)?.label ?? "Hours Tracker"}
+              </span>
+              <ConnectivityChip />
+            </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
+                  aria-label="Account menu"
+                >
+                  {initials}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel className="font-normal">
+                  <div className="font-semibold text-foreground">
+                    {user.name || "New User"}
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+                  {user.employeeNumber && (
+                    <div className="text-xs text-muted-foreground">
+                      Employee #: {user.employeeNumber}
+                    </div>
+                  )}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {onExport && (
+                  <DropdownMenuItem className="py-3" disabled={!online} onSelect={onExport}>
+                    <FileDown className="mr-2 h-4 w-4" />
+                    Export hours…
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  className="py-3"
+                  disabled={isExporting || verifiedEntries.length === 0 || !online}
+                  onSelect={handleExportPdf}
+                >
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  {isExporting ? "Exporting..." : "Verified hours summary (PDF)"}
+                </DropdownMenuItem>
+                {user.isAdmin && (
+                  <DropdownMenuItem className="py-3" onSelect={handleAdminClick}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    Admin
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                  Theme
+                </DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={theme}
+                  onValueChange={(v) => setTheme(v as typeof theme)}
+                >
+                  <DropdownMenuRadioItem value="light" className="py-2.5">
+                    <Sun className="mr-2 h-4 w-4" /> Light
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="dark" className="py-2.5">
+                    <Moon className="mr-2 h-4 w-4" /> Dark
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="system" className="py-2.5">
+                    <Monitor className="mr-2 h-4 w-4" /> System
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="py-3 text-primary focus:text-primary"
+                  onSelect={handleLogout}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+
+        {/* Bottom tab bar — thumb-reachable navigation on phones. */}
+        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 backdrop-blur pb-safe">
+          <div className="grid grid-cols-4">
+            {navItems.map(({ path, short, icon: Icon }) => {
+              const active = location === path;
+              return (
+                <button
+                  key={path}
+                  type="button"
+                  onClick={() => setLocation(path)}
+                  aria-current={active ? "page" : undefined}
+                  className={`flex h-16 flex-col items-center justify-center gap-1 text-xs font-medium ${
+                    active ? "text-primary" : "text-muted-foreground"
+                  }`}
+                >
+                  <Icon className={`h-6 w-6 ${active ? "stroke-[2.25]" : ""}`} />
+                  {short}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      </>
+    );
+  }
+
   return (
     <>
       <header className="bg-card shadow-sm border-b border-border">
@@ -133,65 +284,29 @@ export function ProfileHeader({ user, verifiedEntries }: ProfileHeaderProps) {
         {/* Navigation */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="flex space-x-8">
-            <button
-              onClick={() => setLocation("/profile")}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                location === "/profile"
-                  ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <ClipboardList className="h-4 w-4" />
-                OJT Hours
-              </div>
-            </button>
-            <button
-              onClick={() => setLocation("/rope-hours")}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                location === "/rope-hours"
-                  ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Cable className="h-4 w-4" />
-                Rope Hours
-              </div>
-            </button>
-            <button
-              onClick={() => setLocation("/signers")}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                location === "/signers"
-                  ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <UserCheck className="h-4 w-4" />
-                Signers
-              </div>
-            </button>
-            <button
-              onClick={() => setLocation("/organizations")}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                location === "/organizations"
-                  ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Building2 className="h-4 w-4" />
-                Organizations
-              </div>
-            </button>
+            {navItems.map(({ path, label, icon: Icon }) => (
+              <button
+                key={path}
+                onClick={() => setLocation(path)}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  location === path
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </div>
+              </button>
+            ))}
             {user.isAdmin && (
               <button
                 onClick={handleAdminClick}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   location === "/admin"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
                 } ${!online ? "opacity-60" : ""}`}
                 title={online ? "Admin" : "Admin requires internet"}
               >
