@@ -93,3 +93,22 @@
     @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800;
   }
 }
+
+/* Mobile app shell: room for the fixed bottom tab bar and the iOS home
+   indicator / notch when installed as a PWA (viewport-fit=cover). */
+@layer utilities {
+  .pb-mobile-nav {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+  @media (min-width: 768px) {
+    .pb-mobile-nav {
+      padding-bottom: 2rem;
+    }
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
