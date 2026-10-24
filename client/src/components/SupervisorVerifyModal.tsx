@@ -6,12 +6,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Entry, Supervisor } from "@shared/schema";
+import { Entry, Supervisor, ndtMethodLabel, signerMethodLabel } from "@shared/schema";
+import { formatCalendarDate } from "@shared/dates";
 import { supervisorFormSchema, signerToQualifications, type SupervisorFormValues } from "@/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, UserPlus } from "lucide-react";
 import { SignerFormFields } from "@/components/SignerFormFields";
 
 interface SupervisorVerifyModalProps {
@@ -26,7 +26,8 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
   const isBatchMode = Array.isArray(entries) && entries.length >= 2;
   const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedSupervisor, setSelectedSupervisor] = useState<string>("new");
+  // "" = nothing picked yet, "new" = typing in a new signer, else a signer id.
+  const [selectedSupervisor, setSelectedSupervisor] = useState<string>("");
   const [verificationUrl, setVerificationUrl] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
@@ -47,7 +48,7 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
   useEffect(() => {
     if (isOpen) {
       loadSupervisors();
-      setSelectedSupervisor("new");
+      setSelectedSupervisor("");
       setVerificationUrl("");
       form.reset();
     }
@@ -57,8 +58,10 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
     try {
       const response = await fetch("/api/supervisors", { credentials: "include" });
       if (response.ok) {
-        const data = await response.json();
+        const data: Supervisor[] = await response.json();
         setSupervisors(data);
+        // No saved signers yet: go straight to the new-signer form.
+        if (data.length === 0) setSelectedSupervisor("new");
       }
     } catch (error) {
       console.error(error);
@@ -163,22 +166,22 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
     }
   };
 
-  const formatMethod = (m: string) => (m === "UT_THK" ? "UT Thk." : m);
+  const formatMethod = ndtMethodLabel;
 
   const renderEntryDetails = () => {
     if (isBatchMode) {
       return (
-        <div className="bg-neutral-100 rounded-md p-4 mb-4 space-y-1 max-h-48 overflow-y-auto">
-          <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">
+        <div className="bg-muted rounded-md p-4 mb-4 space-y-1 max-h-48 overflow-y-auto">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
             {entries!.length} entries selected
           </p>
           {entries!.map((e) => (
-            <div key={e.id} className="flex justify-between text-sm">
-              <span className="text-neutral-700">{new Date(e.date).toLocaleDateString()} — {e.location}</span>
-              <span className="font-medium text-neutral-900 ml-4">{formatMethod(e.method)} {e.hours.toFixed(1)} h</span>
+            <div key={e.id} className="flex justify-between gap-3 text-sm">
+              <span className="min-w-0 truncate text-muted-foreground">{formatCalendarDate(e.date)} — {e.location}</span>
+              <span className="shrink-0 font-medium text-foreground">{formatMethod(e.method)} {e.hours.toFixed(1)} h</span>
             </div>
           ))}
-          <div className="border-t border-neutral-300 mt-2 pt-2 flex justify-between text-sm font-semibold">
+          <div className="border-t border-border mt-2 pt-2 flex justify-between text-sm font-semibold">
             <span>Total</span>
             <span>{entries!.reduce((s, e) => s + e.hours, 0).toFixed(1)} h</span>
           </div>
@@ -188,16 +191,16 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
 
     if (!entry) return null;
     return (
-      <div className="bg-neutral-100 rounded-md p-4 mb-4">
+      <div className="bg-muted rounded-md p-4 mb-4">
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-          <dt className="text-neutral-500">Date:</dt>
-          <dd className="text-neutral-900 font-medium">{new Date(entry.date).toLocaleDateString()}</dd>
-          <dt className="text-neutral-500">Location:</dt>
-          <dd className="text-neutral-900 font-medium">{entry.location}</dd>
-          <dt className="text-neutral-500">Method:</dt>
-          <dd className="text-neutral-900 font-medium">{formatMethod(entry.method)}</dd>
-          <dt className="text-neutral-500">Hours:</dt>
-          <dd className="text-neutral-900 font-medium">{entry.hours.toFixed(1)}</dd>
+          <dt className="text-muted-foreground">Date:</dt>
+          <dd className="text-foreground font-medium">{formatCalendarDate(entry.date)}</dd>
+          <dt className="text-muted-foreground">Location:</dt>
+          <dd className="text-foreground font-medium">{entry.location}</dd>
+          <dt className="text-muted-foreground">Method:</dt>
+          <dd className="text-foreground font-medium">{formatMethod(entry.method)}</dd>
+          <dt className="text-muted-foreground">Hours:</dt>
+          <dd className="text-foreground font-medium">{entry.hours.toFixed(1)}</dd>
         </dl>
       </div>
     );
@@ -221,7 +224,7 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
           <DialogDescription>
             {isBatchMode
               ? "Choose a supervisor to send a single sign-off request for all selected entries."
-              : "Please provide supervisor information to verify the following hours:"}
+              : "Pick who should verify these hours. They'll get an email with a link to sign off."}
           </DialogDescription>
         </DialogHeader>
 
@@ -229,7 +232,7 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
 
         {verificationUrl ? (
           <div className="space-y-4">
-            <Alert className="bg-amber-50 border-amber-200">
+            <Alert className="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900">
               <AlertDescription>
                 {isBatchMode
                   ? "The batch verification email has been sent. You can also share this direct link:"
@@ -238,7 +241,7 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
             </Alert>
 
             <div className="flex items-center space-x-2">
-              <Input value={verificationUrl} readOnly className="flex-1 bg-gray-50" />
+              <Input value={verificationUrl} readOnly className="flex-1 bg-muted" />
               <Button
                 size="icon"
                 variant="outline"
@@ -267,30 +270,66 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
         ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-              <div className="mb-4">
-                <FormLabel>Select Saved Supervisor</FormLabel>
-                <Select value={selectedSupervisor} onValueChange={handleSupervisorChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select or enter new supervisor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="new">Enter new supervisor</SelectItem>
-                    {supervisors.map((supervisor) => (
-                      <SelectItem key={supervisor.id} value={supervisor.id.toString()}>
-                        {supervisor.name} ({supervisor.email})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div>
+                <FormLabel>Who should sign off?</FormLabel>
+                <div className="mt-2 space-y-2" role="radiogroup">
+                  {supervisors.map((supervisor) => {
+                    const value = supervisor.id.toString();
+                    const active = selectedSupervisor === value;
+                    const quals = signerToQualifications(supervisor);
+                    return (
+                      <button
+                        key={supervisor.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => handleSupervisorChange(value)}
+                        className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
+                          active ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
+                            active ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+                          }`}
+                        >
+                          {active && <Check className="h-3 w-3" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium text-foreground">{supervisor.name}</span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {quals.length > 0
+                              ? quals
+                                  .map((q) => `${signerMethodLabel(q.method)} ${q.level.replace("Level ", "")}`)
+                                  .join(" · ")
+                              : supervisor.email}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={selectedSupervisor === "new"}
+                    onClick={() => handleSupervisorChange("new")}
+                    className={`flex w-full items-center gap-3 rounded-lg border border-dashed p-3 text-left transition-colors ${
+                      selectedSupervisor === "new" ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
+                    }`}
+                  >
+                    <UserPlus className="h-5 w-5 shrink-0 text-primary" />
+                    <span className="font-medium text-foreground">New signer</span>
+                  </button>
+                </div>
               </div>
 
-              <SignerFormFields form={form} />
+              {selectedSupervisor === "new" && <SignerFormFields form={form} />}
 
-              <DialogFooter className="mt-6">
-                <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
+              <DialogFooter className="mt-6 gap-2">
+                <Button type="button" variant="outline" className="h-11 sm:h-10" onClick={onClose} disabled={isLoading}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isLoading}>
+                <Button type="submit" className="h-11 sm:h-10" disabled={isLoading || !selectedSupervisor}>
                   {isLoading
                     ? "Sending..."
                     : isBatchMode
