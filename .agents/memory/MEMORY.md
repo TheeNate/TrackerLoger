@@ -1,2 +1,3 @@
 - [Vitest full-run flakiness](vitest-suite-isolation.md) — 2 mcp-tools tests can fail only in full `npx vitest run` (shared DB/mock state across files); pass in isolation; not a regression.
 - [Supervisor qualifications](supervisor-qualifications.md) — signers hold a `qualifications` JSON list; legacy ndtMethod/certificationLevel kept in sync server-side via canonicalizeSupervisorWrite.
+- [Replit npm firewall](replit-npm-firewall.md) — a stale lockfile can reference blocked transitive releases even when compatible safe versions are available.

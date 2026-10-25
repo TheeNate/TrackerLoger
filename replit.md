@@ -106,6 +106,13 @@ This is a web application that digitizes the functionality of an OJT (On-the-Job
 - Environment variables for database and email configuration
 - Replit-specific plugins for development experience
 
+## Running on Replit
+- Set the `APP_EDITION` secret to `rope` for the Rope Access Logbook edition. Vite reads it when the development server starts and when the client is built, so restart or rebuild after changing it.
+- Replit supplies `DATABASE_URL` and `SESSION_SECRET`. On a new, empty development database, run `npm run db:push` once to create the base schema.
+- Use the **Start application** workflow (`npm run dev`); the app serves on port 5000.
+- Email delivery is optional and requires `RESEND_API_KEY`.
+- The current development bootstrap creates an administrator with a fixed credential and prints it in startup logs. Keep this preview private and do not use real user data until that bootstrap is replaced with a secure first-admin setup.
+
 ### Production Build
 - Vite builds optimized static assets to `dist/public`
 - ESBuild bundles server code to `dist/index.js`
