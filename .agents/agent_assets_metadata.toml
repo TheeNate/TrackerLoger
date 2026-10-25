@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "88ng0ZEbCE1BKHohTL6Vp"
+uri = "file://attached_assets/generated_videos/rope-access-logbook-overview.mp4"
+type = "video"
+title = "Rope Access Logbook — Animated Overview"
+description = "A 6-second widescreen animated overview showing rope-access work, hour logging, supervisor approval, certification progress, and report exports. 1280×720 MP4."
+logical_id = "440c1a3a-dd74-4a39-9b49-555641277032"
+content_hash = "sha256:fa3931b39f0db4db790cc5ee6272b38954ef631ede832f9942b89a67e3365b57"
+size = 1031262
+mtime_ms = 1792958360360
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:440a86d9-24fb-4370-b6fb-a2028566a2d1/440c1a3a-dd74-4a39-9b49-555641277032/101c4baf-f9f4-4d6f-9f5f-6dfc6c942398"
+storage_version_token = "1792958374855160"
+content_type = "video/mp4"
