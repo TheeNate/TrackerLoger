@@ -51,6 +51,7 @@ import {
   type TrackRules,
 } from "@shared/certProgress";
 import { sendCertEligibleEmail } from "./email";
+import { ROPE_ONLY } from "./edition";
 
 // ---- NDT requirements (admin-editable) ----
 
@@ -168,6 +169,7 @@ function scopesFor(data: Loaded, userId: number, onlyOrg?: number) {
 function progressFor(data: Loaded, userId: number, now: Date, onlyOrg?: number): TrackProgress[] {
   const inputs = inputsFor(data, userId);
   const out = allTrackProgress(ROPE_RULES, inputs, now);
+  if (ROPE_ONLY) return out; // the rope logbook has no NDT tracks
   for (const { scope, requirements } of scopesFor(data, userId, onlyOrg)) {
     out.push(...allTrackProgress(ndtRules(requirements), inputs, now, scope));
   }

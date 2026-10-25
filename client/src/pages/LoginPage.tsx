@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { MagicLink } from "@/components/MagicLink";
 import { useToast } from "@/hooks/use-toast";
+import { HOME_PATH } from "@/lib/edition";
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
@@ -31,7 +32,7 @@ export default function LoginPage() {
       
       // Redirect to profile page
       setTimeout(() => {
-        setLocation("/profile");
+        setLocation(HOME_PATH);
       }, 1000);
     },
     onError: (error) => {
@@ -51,7 +52,7 @@ export default function LoginPage() {
     queryKey: ["/api/user"],
     onSuccess: () => {
       // User is already logged in, redirect to profile
-      setLocation("/profile");
+      setLocation(HOME_PATH);
     },
     onError: () => {
       // Not authenticated, do nothing (show login form)

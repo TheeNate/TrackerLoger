@@ -14,13 +14,15 @@ import { AddUserDialog } from "@/components/admin/AddUserDialog";
 import { ProgressBoard } from "@/components/admin/ProgressBoard";
 import { CertRequirementsEditor } from "@/components/admin/CertRequirementsEditor";
 import { NotificationBell } from "@/components/admin/NotificationBell";
+import { HOME_PATH, ROPE_ONLY } from "@/lib/edition";
 
 type AdminTab = "progress" | "users" | "requirements";
-const TABS: { id: AdminTab; label: string; icon: typeof Users }[] = [
+// Requirements are the NDT numbers, so the rope logbook doesn't have them.
+const TABS = ([
   { id: "progress", label: "Progress", icon: Trophy },
   { id: "users", label: "Users", icon: Users },
   { id: "requirements", label: "Requirements", icon: SlidersHorizontal },
-];
+] as { id: AdminTab; label: string; icon: typeof Users }[]).filter((t) => !(ROPE_ONLY && t.id === "requirements"));
 
 export default function AdminPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -34,7 +36,7 @@ export default function AdminPage() {
   // Redirect non-admins away.
   useEffect(() => {
     if (!authLoading && user && !user.isAdmin) {
-      setLocation("/profile");
+      setLocation(HOME_PATH);
     }
   }, [user, authLoading, setLocation]);
 
@@ -83,7 +85,9 @@ export default function AdminPage() {
             <AdminViewToggle />
           </div>
         </div>
-        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-3 md:flex md:gap-6">
+        <nav
+          className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid ${TABS.length === 2 ? "grid-cols-2" : "grid-cols-3"} md:flex md:gap-6`}
+        >
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}

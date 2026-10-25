@@ -2,6 +2,7 @@ import { useLocation } from "wouter";
 import { useEffect } from "react";
 import { ResetPasswordForm } from "@/components/ResetPasswordForm";
 import { useAuth } from "@/hooks/use-auth";
+import { HOME_PATH } from "@/lib/edition";
 
 export default function ResetPasswordPage() {
   const { user, isLoading } = useAuth();
@@ -10,7 +11,7 @@ export default function ResetPasswordPage() {
   // Redirect to profile if already logged in
   useEffect(() => {
     if (!isLoading && user) {
-      setLocation("/profile");
+      setLocation(HOME_PATH);
     }
   }, [user, isLoading, setLocation]);
 

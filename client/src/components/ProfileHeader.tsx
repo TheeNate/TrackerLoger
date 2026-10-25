@@ -35,6 +35,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { AdminViewToggle } from "@/components/admin/AdminViewToggle";
 import { NotificationBell } from "@/components/admin/NotificationBell";
 import { useOnlineStatus } from "@/lib/offline/online";
+import { BRAND, ROPE_ONLY } from "@/lib/edition";
 
 interface ProfileHeaderProps {
   user: Partial<User>;
@@ -48,7 +49,7 @@ const navItems = [
   { path: "/rope-hours", label: "Rope Hours", short: "Rope", icon: Cable },
   { path: "/signers", label: "Signers", short: "Signers", icon: UserCheck },
   { path: "/organizations", label: "Organizations", short: "Orgs", icon: Building2 },
-];
+].filter((n) => !(ROPE_ONLY && n.path === "/profile"));
 
 export function ProfileHeader({ user, verifiedEntries, onExport }: ProfileHeaderProps) {
   const [isExporting, setIsExporting] = useState(false);
@@ -151,7 +152,7 @@ export function ProfileHeader({ user, verifiedEntries, onExport }: ProfileHeader
                 <ClipboardList className="h-4 w-4" />
               </span>
               <span className="truncate text-base font-semibold text-foreground">
-                {navItems.find((n) => n.path === location)?.label ?? "Hours Tracker"}
+                {navItems.find((n) => n.path === location)?.label ?? BRAND.shortName}
               </span>
               <ConnectivityChip />
             </div>
@@ -187,14 +188,16 @@ export function ProfileHeader({ user, verifiedEntries, onExport }: ProfileHeader
                       Export hours…
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem
-                    className="py-3"
-                    disabled={isExporting || verifiedEntries.length === 0 || !online}
-                    onSelect={handleExportPdf}
-                  >
-                    <FileSpreadsheet className="mr-2 h-4 w-4" />
-                    {isExporting ? "Exporting..." : "Verified hours summary (PDF)"}
-                  </DropdownMenuItem>
+                  {!ROPE_ONLY && (
+                    <DropdownMenuItem
+                      className="py-3"
+                      disabled={isExporting || verifiedEntries.length === 0 || !online}
+                      onSelect={handleExportPdf}
+                    >
+                      <FileSpreadsheet className="mr-2 h-4 w-4" />
+                      {isExporting ? "Exporting..." : "Verified hours summary (PDF)"}
+                    </DropdownMenuItem>
+                  )}
                   {user.isAdmin && (
                     <DropdownMenuItem className="py-3" onSelect={handleAdminClick}>
                       <Settings className="mr-2 h-4 w-4" />
@@ -235,7 +238,7 @@ export function ProfileHeader({ user, verifiedEntries, onExport }: ProfileHeader
 
         {/* Bottom tab bar — thumb-reachable navigation on phones. */}
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 backdrop-blur pb-safe">
-          <div className="grid grid-cols-4">
+          <div className={`grid ${navItems.length === 3 ? "grid-cols-3" : "grid-cols-4"}`}>
             {navItems.map(({ path, short, icon: Icon }) => {
               const active = location === path;
               return (
@@ -265,7 +268,7 @@ export function ProfileHeader({ user, verifiedEntries, onExport }: ProfileHeader
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-semibold text-foreground">
-              Hours Tracker
+              {ROPE_ONLY ? BRAND.name : "Hours Tracker"}
             </h1>
             <ConnectivityChip />
           </div>
@@ -339,6 +342,8 @@ export function ProfileHeader({ user, verifiedEntries, onExport }: ProfileHeader
               )}
             </div>
 
+            {/* The OJT summary PDF; the rope logbook exports from its own page. */}
+            {!ROPE_ONLY && (
             <div className="mt-4 sm:mt-0">
               <Button
                 variant="outline"
@@ -357,6 +362,7 @@ export function ProfileHeader({ user, verifiedEntries, onExport }: ProfileHeader
                 {isExporting ? "Exporting..." : "Export Verified Hours as PDF"}
               </Button>
             </div>
+            )}
           </div>
         </div>
       </div>

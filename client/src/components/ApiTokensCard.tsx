@@ -78,7 +78,7 @@ export function ApiTokensCard() {
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-neutral-900">Claude / MCP access tokens</h2>
         <p className="text-sm text-neutral-600 mt-1">
-          Create a bearer token to let Claude (or another MCP client) read and update your OJT log on your
+          Create a bearer token to let Claude (or another MCP client) read and update your log on your
           behalf. Each token grants full access to your account except admin and signed-log import — treat
           them like passwords.
         </p>

@@ -10,6 +10,7 @@ import { ProgressBoard } from "@/components/admin/ProgressBoard";
 import { CertRequirementsEditor } from "@/components/admin/CertRequirementsEditor";
 import type { User, Entry, Organization } from "@shared/schema";
 import type { UserOrgMembership, OrgMemberEntry } from "@/types";
+import { ROPE_ONLY } from "@/lib/edition";
 
 export default function OrganizationsPage() {
   const { toast } = useToast();
@@ -219,11 +220,11 @@ export default function OrganizationsPage() {
 }
 
 type OrgTab = "members" | "progress" | "requirements";
-const ORG_TABS: { id: OrgTab; label: string; icon: typeof Users }[] = [
+const ORG_TABS = ([
   { id: "members", label: "Members", icon: Users },
   { id: "progress", label: "Progress", icon: Trophy },
   { id: "requirements", label: "Requirements", icon: SlidersHorizontal },
-];
+] as { id: OrgTab; label: string; icon: typeof Users }[]).filter((t) => !(ROPE_ONLY && t.id === "requirements"));
 
 // What an org admin manages: members, their certification progress, and the
 // org's own NDT OJT requirements (shared/certProgress.ts).
@@ -231,7 +232,7 @@ function OrgAdminPanel({ orgId, myUserId }: { orgId: number; myUserId: number })
   const [tab, setTab] = useState<OrgTab>("members");
   return (
     <div className="border-t border-neutral-200">
-      <nav className="grid grid-cols-3 border-b border-neutral-200 md:flex md:gap-6 md:px-4">
+      <nav className={`grid ${ORG_TABS.length === 2 ? "grid-cols-2" : "grid-cols-3"} border-b border-neutral-200 md:flex md:gap-6 md:px-4`}>
         {ORG_TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}

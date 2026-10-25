@@ -30,6 +30,12 @@ import { VerificationProofModal } from "@/components/VerificationProofModal";
 import { useOnlineStatus } from "@/lib/offline/online";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileLogDrawer } from "@/components/MobileLogDrawer";
+import { RopeProgressCard } from "@/components/RopeProgressCard";
+import { CertificationsCard } from "@/components/CertificationsCard";
+import { ShareProfileCard } from "@/components/ShareProfileCard";
+import { ApiTokensCard } from "@/components/ApiTokensCard";
+import { ROPE_ONLY } from "@/lib/edition";
+import { downloadRopeHoursCsv } from "@/lib/ropeCsv";
 import {
   isPendingSync,
   getSyncFailure,
@@ -691,6 +697,8 @@ export default function RopeHoursPage() {
             </Button>
           </div>
 
+          <RopeProgressCard />
+
           <section>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-foreground">
@@ -710,9 +718,24 @@ export default function RopeHoursPage() {
                     <X className="mr-1 h-4 w-4" /> Cancel
                   </Button>
                 ) : (
-                  <Button variant="ghost" className="h-10 text-primary" onClick={startExportSelect}>
-                    Export to form
-                  </Button>
+                  <div className="flex items-center">
+                    <Button variant="ghost" className="h-10 text-primary" onClick={startExportSelect}>
+                      Export to form
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="More export options">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem className="py-3" onSelect={() => downloadRopeHoursCsv(ropeHours)}>
+                          <FileSpreadsheet className="mr-2 h-4 w-4" />
+                          Download all as CSV
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 ))}
             </div>
             {isLoading ? (
@@ -728,6 +751,15 @@ export default function RopeHoursPage() {
           </section>
 
           <ImportedLogGroups records={ropeHours} recordType="rope" />
+
+          {/* The rope logbook has no OJT page, so the profile cards live here. */}
+          {ROPE_ONLY && (
+            <>
+              <CertificationsCard />
+              <ShareProfileCard />
+              <ApiTokensCard />
+            </>
+          )}
 
           {selectMode && (
             <div className="fixed inset-x-0 z-20 border-t border-border bg-card/95 p-3 backdrop-blur bottom-[calc(4rem+env(safe-area-inset-bottom))]">
@@ -778,6 +810,15 @@ export default function RopeHoursPage() {
               <Upload className="h-4 w-4 mr-2" />
               Import from signed log
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={ropeHours.length === 0}
+              onClick={() => downloadRopeHoursCsv(ropeHours)}
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Download CSV
+            </Button>
           </div>
         </div>
 
@@ -795,6 +836,8 @@ export default function RopeHoursPage() {
           </div>
         </CardContent>
       </Card>
+
+      <RopeProgressCard className="my-6" />
 
       {/* Log New Rope Hours Form */}
       {isMobile ? (
@@ -1120,6 +1163,14 @@ export default function RopeHoursPage() {
         </CardContent>
         )}
       </Card>
+
+      {ROPE_ONLY && (
+        <>
+          <CertificationsCard />
+          <ShareProfileCard />
+          <ApiTokensCard />
+        </>
+      )}
       </main>
       )}
 

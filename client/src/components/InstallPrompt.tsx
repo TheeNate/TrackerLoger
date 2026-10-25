@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, X, Share } from "lucide-react";
+import { BRAND } from "@/lib/edition";
 
 const DISMISS_KEY = "ojt-install-dismissed-v1";
 
@@ -86,7 +87,7 @@ export function InstallPrompt() {
         </div>
         <div className="flex-1 pr-4">
           <h3 className="text-sm font-semibold text-neutral-900">
-            Install OJT Tracker
+            Install {BRAND.shortName}
           </h3>
           {showIOS ? (
             <p className="mt-1 text-xs text-neutral-600">
@@ -96,7 +97,7 @@ export function InstallPrompt() {
             </p>
           ) : (
             <p className="mt-1 text-xs text-neutral-600">
-              Add OJT Tracker to your home screen to log hours offline on the job
+              Add {BRAND.shortName} to your home screen to log hours offline on the job
               site.
             </p>
           )}

@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Copy, Link2, RefreshCw, Share2 } from "lucide-react";
 import type { Certification, Entry, ShareSettings } from "@shared/schema";
+import { ROPE_ONLY } from "@/lib/edition";
 
 type ShareState = {
   shareToken: string | null;
@@ -26,7 +27,8 @@ export function ShareProfileCard() {
     queryKey: ["/api/rope-hours/totals"],
   });
 
-  const availableMethods = Array.from(new Set(entries.map((e) => e.method))).sort();
+  // The rope logbook shares rope hours and certs only, never OJT methods.
+  const availableMethods = ROPE_ONLY ? [] : Array.from(new Set(entries.map((e) => e.method))).sort();
   const hasRope = (ropeTotals?.count ?? 0) > 0;
   const enabled = !!share?.shareToken;
 
@@ -41,7 +43,7 @@ export function ShareProfileCard() {
     initialized.current = true;
     const s = share?.shareSettings;
     if (s) {
-      setMethods(new Set(s.ojtMethods));
+      setMethods(new Set(ROPE_ONLY ? [] : s.ojtMethods));
       setIncludeRope(s.includeRope);
       setCertIds(new Set(s.certIds));
     } else {
@@ -126,6 +128,7 @@ export function ShareProfileCard() {
 
       {/* What to share */}
       <div className="space-y-4">
+        {!ROPE_ONLY && (
         <div>
           <p className="text-sm font-medium text-neutral-800 mb-2">OJT / NDT methods</p>
           {availableMethods.length === 0 ? (
@@ -145,6 +148,7 @@ export function ShareProfileCard() {
             </div>
           )}
         </div>
+        )}
 
         {hasRope && (
           <label className="inline-flex items-center gap-1.5 text-sm">

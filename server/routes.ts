@@ -1137,6 +1137,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // The bell: certification alerts for site admins and org admins.
+  // The signed-in technician's own progress toward their next level.
+  app.get("/api/progress", requireAuth, async (req, res) => {
+    try {
+      res.json(await userProgress(req.session.userId!));
+    } catch (error) {
+      console.error("Own progress error:", error);
+      res.status(500).json({ message: "Error loading progress" });
+    }
+  });
+
   app.get("/api/notifications", requireAuth, async (req, res) => {
     try {
       res.json(await listNotifications(req.session.userId!));
