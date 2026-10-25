@@ -6,6 +6,7 @@ import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
 import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
+import { BRAND } from "./edition";
 
 const viteLogger = createLogger();
 
@@ -18,6 +19,20 @@ export function log(message: string, source = "express") {
   });
 
   console.log(`${formattedTime} [${source}] ${message}`);
+}
+
+// The PWA manifest carries the edition's name (server/edition.ts).
+function serveManifest(app: Express, file: string) {
+  app.get("/manifest.webmanifest", async (_req, res, next) => {
+    try {
+      const manifest = JSON.parse(await fs.promises.readFile(file, "utf-8"));
+      res
+        .type("application/manifest+json")
+        .send({ ...manifest, name: BRAND.name, short_name: BRAND.shortName, description: BRAND.description });
+    } catch (e) {
+      next(e);
+    }
+  });
 }
 
 export async function setupVite(app: Express, server: Server) {
@@ -41,6 +56,7 @@ export async function setupVite(app: Express, server: Server) {
     appType: "custom",
   });
 
+  serveManifest(app, path.resolve(import.meta.dirname, "..", "client", "public", "manifest.webmanifest"));
   app.use(vite.middlewares);
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
@@ -115,6 +131,7 @@ export function serveStatic(app: Express) {
     res.sendFile(swPath);
   });
 
+  serveManifest(app, path.join(distPath, "manifest.webmanifest"));
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist

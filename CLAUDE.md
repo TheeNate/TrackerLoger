@@ -78,10 +78,15 @@ Admin → **Progress** tab: top 10 technicians closest to their next certificati
 - Only **verified** records count; unverified amounts show as "unsigned".
 - Alerts: `checkProgress` records a `cert_milestones` row (unique user / track key / level; the key includes `@org:<id>` for org requirements, so each fires once per scope) and notifies site admins plus the relevant org admins in-app and by email (`sendCertEligibleEmail`, no-op without Resend). It runs after verifications (single/rope/batch), entry/rope edits, import commits, cert create/update/delete (web and MCP; `queueProgressCheck`, fire-and-forget), after saving requirements, and on a 6-hour sweep (`startProgressSweep`, skipped under Vitest). The first deploy alerts for everyone who already qualifies.
 
+### Editions: full tracker vs. rope logbook (`shared/edition.ts`)
+
+One codebase ships two products. `APP_EDITION=rope` is the **Rope Access Logbook** (sold to SPRAT / IRATA and training companies): no OJT / NDT page, `/profile` redirects to `/rope-hours` (`HOME_PATH`), the tab bar is Rope · Signers · Orgs, the Certifications / Share / API-token cards move onto the Rope page, admin and org admins lose the (NDT-only) Requirements tab, and `server/progress.ts` tracks SPRAT / IRATA only. Anything else is the full OJT + rope tracker. The server reads `APP_EDITION` at runtime (`server/edition.ts`); the client gets it at **build time** through `vite.config.ts` (`__APP_EDITION__`, plus the page title/description), so the deploy's build needs the variable too. The PWA manifest name is rewritten per edition by `serveManifest` in `server/vite.ts`. Gate edition-specific UI with `ROPE_ONLY` from `@/lib/edition`. Both editions have the technician's own SPRAT / IRATA progress card (`RopeProgressCard`, `GET /api/progress`) and a rope-hours CSV download (`client/src/lib/ropeCsv.ts`).
+
 ## Environment variables
 
 - `DATABASE_URL` — **required** (Neon Postgres connection string).
 - `SESSION_SECRET` / `CRYPTO_SECRET` — session encryption and crypto-key wrapping (crypto ops throw without one).
+- `APP_EDITION` — `rope` for the rope-only logbook; unset for the full tracker (see Editions).
 - `RESEND_API_KEY` — transactional email; without it, verification falls back to direct links.
 - `AI_INTEGRATIONS_OPENAI_API_KEY` + `AI_INTEGRATIONS_OPENAI_BASE_URL` — AI extraction fallback (Replit-provided).
 

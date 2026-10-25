@@ -45,6 +45,7 @@ import {
   type Entry,
   type RopeHours,
 } from "@shared/schema";
+import { HOME_PATH, ROPE_ONLY } from "@/lib/edition";
 
 type AdminUserDetail = {
   user: {
@@ -163,7 +164,7 @@ export function UserDetailPanel({
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.clear();
-      setLocation("/profile");
+      setLocation(HOME_PATH);
     },
     onError: (err: Error) =>
       toast({ title: "Could not start", description: err.message, variant: "destructive" }),
@@ -276,10 +277,12 @@ export function UserDetailPanel({
           {` · joined ${fmtDate(u.createdAt)}`}
         </p>
         <div className="flex flex-wrap gap-4 mt-3 text-sm">
-          <span className="text-neutral-700">
-            <strong>{detail.totals.ojtVerifiedHours}</strong> verified OJT hrs
-            <span className="text-neutral-400"> / {detail.totals.ojtHours}</span>
-          </span>
+          {!ROPE_ONLY && (
+            <span className="text-neutral-700">
+              <strong>{detail.totals.ojtVerifiedHours}</strong> verified OJT hrs
+              <span className="text-neutral-400"> / {detail.totals.ojtHours}</span>
+            </span>
+          )}
           <span className="text-neutral-700">
             <strong>{detail.totals.ropeVerifiedHours}</strong> verified rope hrs
             <span className="text-neutral-400"> / {detail.totals.ropeHours}</span>
@@ -359,8 +362,8 @@ export function UserDetailPanel({
       <Section title="Certification progress" count={trackedProgress.length} defaultOpen>
         {trackedProgress.length === 0 ? (
           <p className="text-sm text-neutral-500">
-            Nothing to track yet. Verified OJT hours count toward the NDT requirements; add their SPRAT / IRATA
-            certificate (with level and issue date) to track rope hours toward the next level.
+            Nothing to track yet. {ROPE_ONLY ? "Add" : "Verified OJT hours count toward the NDT requirements; add"} their
+            SPRAT / IRATA certificate (with level and issue date) to track rope hours toward the next level.
           </p>
         ) : (
           <div className="space-y-4">
@@ -429,6 +432,7 @@ export function UserDetailPanel({
       </Section>
 
       {/* OJT log */}
+      {!ROPE_ONLY && (
       <Section title="OJT / NDT log" count={entries.length}>
         {entries.length === 0 ? (
           <p className="text-sm text-neutral-500">No entries.</p>
@@ -474,6 +478,7 @@ export function UserDetailPanel({
           </div>
         )}
       </Section>
+      )}
 
       {/* Rope hours */}
       <Section title="Rope access hours" count={rope.length}>
@@ -787,7 +792,7 @@ function AdminCertDialog({
               id="ac-name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="e.g. ASNT NDT Level II"
+              placeholder={ROPE_ONLY ? "e.g. SPRAT Level I" : "e.g. ASNT NDT Level II"}
               maxLength={200}
               required
             />

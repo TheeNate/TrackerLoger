@@ -1,6 +1,7 @@
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Settings, User } from "lucide-react";
+import { HOME_PATH } from "@/lib/edition";
 
 // Segmented control letting an admin flip between their own technician view
 // and the admin dashboard. Renders nothing for non-admins.
@@ -18,7 +19,7 @@ export function AdminViewToggle() {
     <div className="inline-flex rounded-md border border-neutral-200 bg-neutral-50 p-0.5 text-sm">
       <button
         type="button"
-        onClick={() => setLocation("/profile")}
+        onClick={() => setLocation(HOME_PATH)}
         className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded px-2.5 py-1 font-medium transition-colors ${
           !onAdmin
             ? "bg-white text-neutral-900 shadow-sm"

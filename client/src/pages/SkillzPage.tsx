@@ -16,6 +16,7 @@ import {
   Bot,
   ShieldAlert,
 } from "lucide-react";
+import { HOME_PATH } from "@/lib/edition";
 
 const ORIGIN = typeof window !== "undefined" ? window.location.origin : "https://ojt.n8ai.io";
 
@@ -214,7 +215,7 @@ export default function SkillzPage() {
             <Bot className="h-6 w-6 text-blue-600" />
             <span className="font-semibold">OJT Tracker — Skillz</span>
           </div>
-          <Link href="/profile">
+          <Link href={HOME_PATH}>
             <Button variant="outline" size="sm">
               Open the app
               <ExternalLink className="h-4 w-4 ml-2" />
@@ -258,7 +259,7 @@ export default function SkillzPage() {
             <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
               <li>
                 Open the app and go to{" "}
-                <Link href="/profile" className="text-blue-600 underline font-medium">
+                <Link href={HOME_PATH} className="text-blue-600 underline font-medium">
                   your profile
                 </Link>
                 .

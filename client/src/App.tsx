@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Toaster } from "@/components/ui/toaster";
@@ -25,6 +25,7 @@ import NewPasswordPage from "@/pages/NewPasswordPage";
 import AdminPage from "@/pages/AdminPage";
 import SkillzPage from "@/pages/SkillzPage";
 import { ProtectedRoute } from "@/lib/protected-route";
+import { ROPE_ONLY } from "@/lib/edition";
 
 const persister = createIDBPersister();
 
@@ -34,9 +35,14 @@ function Router() {
       <Route path="/" component={AuthPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/profile">
-        <ProtectedRoute>
-          <ProfilePage />
-        </ProtectedRoute>
+        {/* The rope logbook has no OJT page; rope hours are home. */}
+        {ROPE_ONLY ? (
+          <Redirect to="/rope-hours" replace />
+        ) : (
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        )}
       </Route>
       <Route path="/rope-hours">
         <ProtectedRoute>

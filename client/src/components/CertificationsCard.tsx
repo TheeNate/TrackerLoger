@@ -143,6 +143,7 @@ export function CertificationsCard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/certifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
       toast({ title: editingId ? "Certification updated" : "Certification added" });
       resetAndClose();
     },
@@ -161,6 +162,7 @@ export function CertificationsCard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/certifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
       toast({ title: "Certification removed" });
     },
   });

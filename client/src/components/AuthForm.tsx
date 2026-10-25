@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
+import { HOME_PATH } from "@/lib/edition";
 
 // Form validation schemas
 const loginSchema = z.object({
@@ -80,7 +81,7 @@ export function AuthForm() {
         if (userData && userData.isAdmin) {
           window.location.href = "/admin";
         } else {
-          window.location.href = "/profile";
+          window.location.href = HOME_PATH;
         }
       }, 100);
     } catch (err) {
@@ -104,7 +105,7 @@ export function AuthForm() {
       }
       
       // Registration successful
-      setLocation("/profile");
+      setLocation(HOME_PATH);
     } catch (err) {
       console.error("Registration error:", err);
       setError(err instanceof Error ? err.message : "An unexpected error occurred");

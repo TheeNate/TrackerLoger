@@ -5,6 +5,29 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { getQueryFn } from "@/lib/queryClient";
+import { HOME_PATH, ROPE_ONLY } from "@/lib/edition";
+
+const HERO = ROPE_ONLY
+  ? {
+      title: "Your Rope Access Logbook",
+      blurb: "Log your hours on your phone, get them signed by your supervisor, and see exactly how close you are to your next SPRAT or IRATA level.",
+      points: [
+        "SPRAT and IRATA hours: ascents, descents, rope transfers, hauling, rigging",
+        "Supervisor sign-off in the app, no paper to lose",
+        "Progress to your next level: hours and time at level",
+        "Export to SPRAT / IRATA log forms, PDF or CSV",
+      ],
+    }
+  : {
+      title: "Streamline Your OJT Progress Tracking",
+      blurb: "Keep track of your training hours, get supervisor verification, and generate verified reports for your certifications.",
+      points: [
+        "Track hours by NDT method categories",
+        "Request verification from supervisors",
+        "Export verified logs as PDF documents",
+        "Monitor progress toward certification requirements",
+      ],
+    };
 
 export default function AuthPage() {
   const [, setLocation] = useLocation();
@@ -30,7 +53,7 @@ export default function AuthPage() {
       if ((user as any).isAdmin) {
         setLocation("/admin");
       } else {
-        setLocation("/profile");
+        setLocation(HOME_PATH);
       }
     }
   }, [user, isLoading, setLocation]);
@@ -58,29 +81,15 @@ export default function AuthPage() {
       <div className="hidden lg:flex lg:w-1/2 bg-primary relative items-center justify-center">
         <div className="absolute inset-0 bg-black opacity-20"></div>
         <div className="z-10 text-center p-8">
-          <h2 className="text-3xl font-bold text-white mb-4">
-            Streamline Your OJT Progress Tracking
-          </h2>
-          <p className="text-white text-lg mb-6">
-            Keep track of your training hours, get supervisor verification, and generate verified reports for your certifications.
-          </p>
+          <h2 className="text-3xl font-bold text-white mb-4">{HERO.title}</h2>
+          <p className="text-white text-lg mb-6">{HERO.blurb}</p>
           <ul className="text-white text-left space-y-3 max-w-md mx-auto">
-            <li className="flex items-center">
-              <span className="mr-2 bg-white/20 p-1 rounded-full">✓</span>
-              Track hours by NDT method categories
-            </li>
-            <li className="flex items-center">
-              <span className="mr-2 bg-white/20 p-1 rounded-full">✓</span>
-              Request verification from supervisors
-            </li>
-            <li className="flex items-center">
-              <span className="mr-2 bg-white/20 p-1 rounded-full">✓</span>
-              Export verified logs as PDF documents
-            </li>
-            <li className="flex items-center">
-              <span className="mr-2 bg-white/20 p-1 rounded-full">✓</span>
-              Monitor progress toward certification requirements
-            </li>
+            {HERO.points.map((point) => (
+              <li key={point} className="flex items-center">
+                <span className="mr-2 bg-white/20 p-1 rounded-full">✓</span>
+                {point}
+              </li>
+            ))}
           </ul>
         </div>
       </div>
