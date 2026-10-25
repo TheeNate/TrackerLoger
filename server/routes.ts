@@ -2480,6 +2480,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           "Admin user created with email: admin@ojt.tracker and password: admin123",
         );
       }
+
+      if (process.env.NODE_ENV === "development") {
+        const [existingDemoUser] = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, "demo@email.com"));
+
+        if (!existingDemoUser) {
+          const demoPassword = await hash("12345678", 10);
+          await db.insert(users).values({
+            email: "demo@email.com",
+            password: demoPassword,
+            name: "Demo User",
+            isAdmin: false,
+          });
+          console.log("Demo user created: demo@email.com");
+        }
+      }
     } catch (error) {
       console.error("Error setting up admin:", error);
     }
