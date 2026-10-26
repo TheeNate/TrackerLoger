@@ -4,15 +4,22 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Entry, Supervisor, ndtMethodLabel, signerMethodLabel } from "@shared/schema";
 import { formatCalendarDate } from "@shared/dates";
 import { supervisorFormSchema, signerToQualifications, type SupervisorFormValues } from "@/types";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Check, Copy, UserPlus } from "lucide-react";
+import { Check, UserPlus } from "lucide-react";
 import { SignerFormFields } from "@/components/SignerFormFields";
+import {
+  ChannelPicker,
+  type NotificationChannel,
+} from "@/components/ChannelPicker";
+import {
+  SignatureLinkSent,
+  type SignatureDelivery,
+  type SignatureSupervisor,
+} from "@/components/SignatureLinkSent";
 
 interface SupervisorVerifyModalProps {
   isOpen: boolean;
@@ -29,7 +36,14 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
   // "" = nothing picked yet, "new" = typing in a new signer, else a signer id.
   const [selectedSupervisor, setSelectedSupervisor] = useState<string>("");
   const [verificationUrl, setVerificationUrl] = useState<string>("");
-  const [copied, setCopied] = useState(false);
+  const [smsBody, setSmsBody] = useState("");
+  const [delivery, setDelivery] = useState<SignatureDelivery | null>(null);
+  const [resultSupervisor, setResultSupervisor] =
+    useState<SignatureSupervisor | null>(null);
+  const [channels, setChannels] = useState<NotificationChannel[]>([
+    "email",
+    "sms",
+  ]);
   const { toast } = useToast();
 
   const form = useForm<SupervisorFormValues>({
@@ -50,6 +64,10 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
       loadSupervisors();
       setSelectedSupervisor("");
       setVerificationUrl("");
+      setSmsBody("");
+      setDelivery(null);
+      setResultSupervisor(null);
+      setChannels(["email", "sms"]);
       form.reset();
     }
   }, [isOpen, form]);
@@ -67,6 +85,12 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
       console.error(error);
     }
   };
+
+  const watchedEmail = form.watch("email");
+  const watchedPhone = form.watch("phone");
+  const availableChannels = channels.filter((channel) =>
+    channel === "email" ? Boolean(watchedEmail?.trim()) : Boolean(watchedPhone?.trim()),
+  );
 
   const handleSupervisorChange = (value: string) => {
     setSelectedSupervisor(value);
@@ -100,8 +124,6 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
     }
 
     setIsLoading(true);
-    setCopied(false);
-
     try {
       let supervisorId: number;
 
@@ -123,35 +145,25 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
 
       if (isBatchMode) {
         const entryIds = entries!.map((e) => e.id);
-        const response = await apiRequest("POST", "/api/batch-verify-request", { entryIds, supervisorId });
+        const response = await apiRequest("POST", "/api/batch-verify-request", { entryIds, supervisorId, channels: availableChannels });
         if (!response.ok) {
           const err = await response.json();
           throw new Error(err.message || "Failed to send batch verification request");
         }
         const data = await response.json();
 
-        toast({
-          title: "Batch verification request sent",
-          description: `A single verification link has been sent to the supervisor for ${entries!.length} entries.`,
-        });
-
         setVerificationUrl(data.verificationUrl);
+        setSmsBody(data.smsBody);
+        setDelivery(data.delivery);
+        setResultSupervisor(data.supervisor);
       } else {
-        const response = await apiRequest("POST", `/api/verify-request/${entry!.id}`, { supervisorId });
+        const response = await apiRequest("POST", `/api/verify-request/${entry!.id}`, { supervisorId, channels: availableChannels });
         const data = await response.json();
 
-        toast({
-          title: "Verification request sent",
-          description: "A verification link has been generated. You can also share it directly if needed.",
-        });
-
-        if (data.entry && data.entry.verificationToken) {
-          const url = `${window.location.origin}/verify/${data.entry.verificationToken}`;
-          setVerificationUrl(url);
-        } else {
-          onSuccess();
-          onClose();
-        }
+        setVerificationUrl(data.verificationUrl);
+        setSmsBody(data.smsBody);
+        setDelivery(data.delivery);
+        setResultSupervisor(data.supervisor);
       }
     } catch (error: any) {
       console.error(error);
@@ -161,6 +173,8 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
         variant: "destructive",
       });
       setVerificationUrl("");
+      setDelivery(null);
+      setResultSupervisor(null);
     } finally {
       setIsLoading(false);
     }
@@ -230,43 +244,19 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
 
         {renderEntryDetails()}
 
-        {verificationUrl ? (
-          <div className="space-y-4">
-            <Alert className="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900">
-              <AlertDescription>
-                {isBatchMode
-                  ? "The batch verification email has been sent. You can also share this direct link:"
-                  : "The verification email has been sent, but in case it wasn't received, you can share this direct verification link with the supervisor:"}
-              </AlertDescription>
-            </Alert>
-
-            <div className="flex items-center space-x-2">
-              <Input value={verificationUrl} readOnly className="flex-1 bg-muted" />
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => {
-                  navigator.clipboard.writeText(verificationUrl);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }}
-              >
-                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
-
-            <div className="flex justify-end mt-4">
-              <Button
-                onClick={() => {
-                  setVerificationUrl("");
-                  onSuccess();
-                  onClose();
-                }}
-              >
-                Done
-              </Button>
-            </div>
-          </div>
+        {verificationUrl && delivery && resultSupervisor ? (
+          <SignatureLinkSent
+            verificationUrl={verificationUrl}
+            smsBody={smsBody}
+            delivery={delivery}
+            supervisor={resultSupervisor}
+            entryCount={isBatchMode ? entries!.length : undefined}
+            onDone={() => {
+              setVerificationUrl("");
+              onSuccess();
+              onClose();
+            }}
+          />
         ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
@@ -325,11 +315,18 @@ export function SupervisorVerifyModal({ isOpen, onClose, onSuccess, entry, entri
 
               {selectedSupervisor === "new" && <SignerFormFields form={form} />}
 
+              <ChannelPicker
+                email={watchedEmail}
+                phone={watchedPhone}
+                channels={channels}
+                onChange={setChannels}
+              />
+
               <DialogFooter className="mt-6 gap-2">
                 <Button type="button" variant="outline" className="h-11 sm:h-10" onClick={onClose} disabled={isLoading}>
                   Cancel
                 </Button>
-                <Button type="submit" className="h-11 sm:h-10" disabled={isLoading || !selectedSupervisor}>
+                <Button type="submit" className="h-11 sm:h-10" disabled={isLoading || !selectedSupervisor || availableChannels.length === 0}>
                   {isLoading
                     ? "Sending..."
                     : isBatchMode

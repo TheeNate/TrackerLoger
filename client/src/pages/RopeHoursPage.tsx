@@ -20,7 +20,7 @@ import {
 import { formatCalendarDate } from "@shared/dates";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { RopeHours } from "@shared/schema";
+import { RopeHours, Supervisor } from "@shared/schema";
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { EditRopeHourDialog } from "@/components/EditRopeHourDialog";
 import { ImportLogDialog } from "@/components/ImportLogDialog";
@@ -36,6 +36,7 @@ import { ShareProfileCard } from "@/components/ShareProfileCard";
 import { ApiTokensCard } from "@/components/ApiTokensCard";
 import { ROPE_ONLY } from "@/lib/edition";
 import { downloadRopeHoursCsv } from "@/lib/ropeCsv";
+import { RopeVerificationRequestDialog } from "@/components/RopeVerificationRequestDialog";
 import {
   isPendingSync,
   getSyncFailure,
@@ -77,6 +78,10 @@ export default function RopeHoursPage() {
   // deletes confirm through one page-level dialog opened from the ⋮ menu.
   const [selectMode, setSelectMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<RopeHours | null>(null);
+  const [verificationTarget, setVerificationTarget] = useState<{
+    entry: RopeHours;
+    supervisor: Supervisor;
+  } | null>(null);
 
   const toggleSelected = (id: number) => {
     setSelectedRopeHourIds((prev) => {
@@ -260,24 +265,11 @@ export default function RopeHoursPage() {
       });
       return;
     }
-    try {
-      await apiRequest("POST", `/api/verify-request-rope/${ropeHourId}`, {
-        supervisorId,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/rope-hours"] });
-
-      toast({
-        title: "Success",
-        description: "Verification request sent to supervisor",
-      });
-    } catch (error) {
-      console.error("Error sending verification request:", error);
-      toast({
-        title: "Error",
-        description: "Failed to send verification request. Please try again.",
-        variant: "destructive",
-      });
-    }
+    const entry = (ropeHours as RopeHours[]).find((item) => item.id === ropeHourId);
+    const supervisor = (supervisors as Supervisor[]).find(
+      (item) => item.id === supervisorId,
+    );
+    if (entry && supervisor) setVerificationTarget({ entry, supervisor });
   };
 
   const calculateTotalHours = () => {
@@ -1209,6 +1201,15 @@ export default function RopeHoursPage() {
         ropeHour={editingRopeHour}
         open={!!editingRopeHour}
         onClose={() => setEditingRopeHour(null)}
+      />
+
+      <RopeVerificationRequestDialog
+        entry={verificationTarget?.entry ?? null}
+        supervisor={verificationTarget?.supervisor ?? null}
+        onClose={() => setVerificationTarget(null)}
+        onSuccess={() =>
+          queryClient.invalidateQueries({ queryKey: ["/api/rope-hours"] })
+        }
       />
 
       <ExportRopeFormDialog

@@ -24,6 +24,13 @@ import {
   sendInviteEmail,
 } from "./email";
 import {
+  buildSignatureSms,
+  deliverSignatureRequest,
+  notificationStatus,
+  parseChannels,
+  type DeliveryResult,
+} from "./notify";
+import {
   insertEntrySchema,
   insertSupervisorSchema,
   insertUserSchema,
@@ -141,6 +148,16 @@ async function canManageOrgProgress(orgId: number, userId: number): Promise<bool
 }
 
 // In server/routes.ts, replace the session configuration with this:
+
+function deliveryAuditNote(delivery: DeliveryResult): string {
+  const sentChannels = [
+    delivery.email === "sent" ? "email" : null,
+    delivery.sms === "sent" ? "text" : null,
+  ].filter(Boolean);
+  return sentChannels.length
+    ? `Link sent by ${sentChannels.join(" and ")}`
+    : "Link shared directly by the technician";
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup session
@@ -1410,6 +1427,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/notifications/status", requireAuth, (_req, res) => {
+    res.json(notificationStatus());
+  });
+
   // Verification routes for rope hours
   app.post("/api/verify-request-rope/:ropeHourId", requireAuthOrToken, async (req, res) => {
     try {
@@ -1458,48 +1479,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user data
       const user = await storage.getUser(userId);
 
-      // Update rope hour with verification token and seed the audit trail.
+      const channels = parseChannels(req.body.channels);
+
+      // Update the rope hour with a verification token and append the request
+      // to its audit trail before attempting optional delivery.
       const requestedAt = new Date();
+      const requestEvent = {
+        action: "verification_requested" as const,
+        timestamp: requestedAt.toISOString(),
+        actor: user?.name ?? undefined,
+        email: supervisor.email,
+      };
+      const initialAuditTrail = [...(ropeHour.auditTrail ?? []), requestEvent];
       const [updatedRopeHour] = await db
         .update(ropeHours)
         .set({
           verificationToken,
           verificationRequestedAt: requestedAt,
           verifiedByEmail: supervisor.email,
-          auditTrail: [
-            {
-              action: "verification_requested",
-              timestamp: requestedAt.toISOString(),
-              actor: user?.name ?? undefined,
-              email: supervisor.email,
-            },
-          ],
+          auditTrail: initialAuditTrail,
         })
         .where(eq(ropeHours.id, ropeHour.id))
         .returning();
 
-      // Create verification URL
-      const baseUrl = getBaseUrl();
+      const baseUrl = getBaseUrl(req);
       const verificationUrl = `${baseUrl}/verify/${verificationToken}`;
+      const smsBody = buildSignatureSms({
+        requester: user?.name || user?.email || "A technician",
+        summary: `${ropeHour.hours}h from ${ropeHour.startDate} to ${ropeHour.endDate} at ${ropeHour.location}`,
+        url: verificationUrl,
+      });
+      const delivery = await deliverSignatureRequest({
+        channels,
+        phone: supervisor.phone,
+        smsBody,
+        sendEmail: () =>
+          sendRopeHoursVerificationRequest(
+            supervisor,
+            user!,
+            updatedRopeHour,
+            baseUrl,
+          ),
+      });
+      const auditTrail = [
+        ...initialAuditTrail.slice(0, -1),
+        { ...requestEvent, note: deliveryAuditNote(delivery) },
+      ];
+      await db
+        .update(ropeHours)
+        .set({ auditTrail })
+        .where(eq(ropeHours.id, ropeHour.id));
 
-      // Log verification URL for debugging
-      console.log("-------------------------------------------------");
-      console.log(
-        "VERIFICATION LINK (For testing):",
-      );
-      console.log(verificationUrl);
-      console.log("-------------------------------------------------\n");
-
-      // Send verification email using Resend with the updated rope hour
-      const emailSent = await sendRopeHoursVerificationRequest(supervisor, user!, updatedRopeHour);
-
-      if (!emailSent) {
-        console.log(
-          "Email delivery failed, but verification URL is available in logs above",
-        );
-      }
-
-      res.json({ message: "Verification request sent" });
+      res.json({
+        message: "Verification request created",
+        supervisor,
+        verificationUrl,
+        smsBody,
+        delivery,
+      });
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Error sending verification request" });
@@ -1554,53 +1591,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user data
       const user = await storage.getUser(userId);
 
-      // Update entry with verification token and seed the audit trail with the
-      // request event (records who asked, which address the link went to, when).
+      const channels = parseChannels(req.body.channels);
+
+      // Preserve prior audit history and append a request event.
       const requestedAt = new Date();
+      const requestEvent = {
+        action: "verification_requested" as const,
+        timestamp: requestedAt.toISOString(),
+        actor: user?.name ?? undefined,
+        email: supervisor.email,
+      };
+      const initialAuditTrail = [...(entry.auditTrail ?? []), requestEvent];
       const [updatedEntry] = await db
         .update(entries)
         .set({
           verificationToken,
           verificationRequestedAt: requestedAt,
           verifiedByEmail: supervisor.email,
-          auditTrail: [
-            {
-              action: "verification_requested",
-              timestamp: requestedAt.toISOString(),
-              actor: user?.name ?? undefined,
-              email: supervisor.email,
-            },
-          ],
+          auditTrail: initialAuditTrail,
         })
         .where(eq(entries.id, entry.id))
         .returning();
 
-      // Create verification URL
-      const baseUrl = getBaseUrl();
+      const baseUrl = getBaseUrl(req);
       const verificationUrl = `${baseUrl}/verify/${verificationToken}`;
-
-      // Log verification URL for debugging
-      console.log("-------------------------------------------------");
-      console.log(
-        "VERIFICATION LINK (For testing since email is not working):",
-      );
-      console.log(verificationUrl);
-      console.log("-------------------------------------------------\n");
-
-      // Send verification email using Resend with the updated entry
-      const emailSent = await sendVerificationRequest(supervisor, user!, updatedEntry);
-
-      if (!emailSent) {
-        console.log(
-          "Email delivery failed, but verification URL is available in logs above",
-        );
-      }
+      const smsBody = buildSignatureSms({
+        requester: user?.name || user?.email || "A technician",
+        summary: `${entry.hours}h on ${entry.date} at ${entry.location}`,
+        url: verificationUrl,
+      });
+      const delivery = await deliverSignatureRequest({
+        channels,
+        phone: supervisor.phone,
+        smsBody,
+        sendEmail: () =>
+          sendVerificationRequest(supervisor, user!, updatedEntry, baseUrl),
+      });
+      const auditTrail = [
+        ...initialAuditTrail.slice(0, -1),
+        { ...requestEvent, note: deliveryAuditNote(delivery) },
+      ];
+      await db.update(entries).set({ auditTrail }).where(eq(entries.id, entry.id));
 
       res.json({
         message: "Verification request sent",
         supervisor,
         verificationUrl,
-        entry: updatedEntry,
+        smsBody,
+        delivery,
       });
     } catch (error) {
       console.error(error);
@@ -1808,37 +1846,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const user = await storage.getUser(userId);
 
-      // Stamp every entry with the same token and seed each audit trail.
+      const channels = parseChannels(req.body.channels);
+
+      // Stamp every entry with the same token and append a request event.
       const requestedAt = new Date();
+      const requestEvent = {
+        action: "verification_requested" as const,
+        timestamp: requestedAt.toISOString(),
+        actor: user?.name ?? undefined,
+        email: supervisor.email,
+      };
+      const auditTrails = new Map(
+        resolvedEntries.map((entry) => [
+          entry.id,
+          [...(entry.auditTrail ?? []), requestEvent],
+        ]),
+      );
       await Promise.all(
         resolvedEntries.map((entry) =>
           db.update(entries).set({
             verificationToken: batchToken,
             verificationRequestedAt: requestedAt,
             verifiedByEmail: supervisor.email,
-            auditTrail: [
-              {
-                action: "verification_requested",
-                timestamp: requestedAt.toISOString(),
-                actor: user?.name ?? undefined,
-                email: supervisor.email,
-              },
-            ],
+            auditTrail: auditTrails.get(entry.id)!,
           }).where(eq(entries.id, entry.id))
         )
       );
 
-      const baseUrl = getBaseUrl();
+      const baseUrl = getBaseUrl(req);
       const verificationUrl = `${baseUrl}/batch-verify/${batchToken}`;
+      const totalHours = resolvedEntries.reduce((sum, item) => sum + item.hours, 0);
+      const smsBody = buildSignatureSms({
+        requester: user?.name || user?.email || "A technician",
+        summary: `${resolvedEntries.length} entries totaling ${totalHours.toFixed(1)}h`,
+        url: verificationUrl,
+      });
+      const delivery = await deliverSignatureRequest({
+        channels,
+        phone: supervisor.phone,
+        smsBody,
+        sendEmail: () =>
+          sendBatchVerificationRequest(
+            supervisor,
+            user!,
+            resolvedEntries,
+            batchToken,
+            baseUrl,
+          ),
+      });
+      await Promise.all(
+        resolvedEntries.map((entry) => {
+          const trail = auditTrails.get(entry.id)!;
+          const updatedTrail = [
+            ...trail.slice(0, -1),
+            { ...requestEvent, note: deliveryAuditNote(delivery) },
+          ];
+          return db
+            .update(entries)
+            .set({ auditTrail: updatedTrail })
+            .where(eq(entries.id, entry.id));
+        }),
+      );
 
-      console.log("-------------------------------------------------");
-      console.log("BATCH VERIFICATION LINK (For testing):");
-      console.log(verificationUrl);
-      console.log("-------------------------------------------------\n");
-
-      await sendBatchVerificationRequest(supervisor, user!, resolvedEntries, batchToken);
-
-      return res.json({ message: "Batch verification request sent", verificationUrl, batchToken });
+      return res.json({
+        message: "Batch verification request created",
+        supervisor,
+        verificationUrl,
+        smsBody,
+        delivery,
+        batchToken,
+      });
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Error sending batch verification request" });

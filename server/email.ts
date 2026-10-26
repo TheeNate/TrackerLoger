@@ -1,5 +1,6 @@
 import { Entry, RopeHours, User, Supervisor } from '@shared/schema';
 import { Resend } from 'resend';
+import type { Request } from 'express';
 
 // Configure Resend
 let resend: Resend | null = null;
@@ -16,10 +17,26 @@ const DEFAULT_FROM_EMAIL = 'noreply@n8ai.io';
 // Custom domain — all verification/reset links use this
 const CUSTOM_DOMAIN = 'ojt.n8ai.io';
 
-// Get base URL for links — always uses the custom domain in production
-export const getBaseUrl = () => {
+// Prefer an explicit public URL, then the production domain, then the current
+// request host in development so generated links work in Replit previews.
+export const getBaseUrl = (req?: Request) => {
+  const configuredBaseUrl = process.env.APP_BASE_URL?.trim().replace(/\/+$/, "");
+  if (configuredBaseUrl) return configuredBaseUrl;
   if (process.env.NODE_ENV === 'production') {
     return `https://${CUSTOM_DOMAIN}`;
+  }
+  if (req) {
+    const forwardedProtocol = req
+      .get("x-forwarded-proto")
+      ?.split(",")[0]
+      .trim();
+    const forwardedHost = req
+      .get("x-forwarded-host")
+      ?.split(",")[0]
+      .trim();
+    const protocol = forwardedProtocol || req.protocol;
+    const host = forwardedHost || req.get("host");
+    if (host) return `${protocol}://${host}`;
   }
   return 'http://localhost:5000';
 };
@@ -57,9 +74,10 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
 export async function sendVerificationRequest(
   supervisor: Supervisor,
   user: User,
-  entry: Entry
+  entry: Entry,
+  baseUrl = getBaseUrl(),
 ): Promise<boolean> {
-  const verificationUrl = `${getBaseUrl()}/verify/${entry.verificationToken}`;
+  const verificationUrl = `${baseUrl}/verify/${entry.verificationToken}`;
 
   console.log("\n-------------------------------------------------");
   console.log("VERIFICATION LINK (For testing):");
@@ -108,9 +126,10 @@ export async function sendVerificationRequest(
 export async function sendRopeHoursVerificationRequest(
   supervisor: Supervisor,
   user: User,
-  ropeHour: RopeHours
+  ropeHour: RopeHours,
+  baseUrl = getBaseUrl(),
 ): Promise<boolean> {
-  const verificationUrl = `${getBaseUrl()}/verify/${ropeHour.verificationToken}`;
+  const verificationUrl = `${baseUrl}/verify/${ropeHour.verificationToken}`;
 
   console.log("\n-------------------------------------------------");
   console.log("ROPE HOURS VERIFICATION LINK (For testing):");
@@ -159,9 +178,10 @@ export async function sendBatchVerificationRequest(
   supervisor: Supervisor,
   user: User,
   batchEntries: Entry[],
-  batchToken: string
+  batchToken: string,
+  baseUrl = getBaseUrl(),
 ): Promise<boolean> {
-  const verificationUrl = `${getBaseUrl()}/batch-verify/${batchToken}`;
+  const verificationUrl = `${baseUrl}/batch-verify/${batchToken}`;
 
   console.log("\n-------------------------------------------------");
   console.log("BATCH VERIFICATION LINK (For testing):");
